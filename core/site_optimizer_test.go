@@ -175,3 +175,18 @@ func TestBatteryForecastTotals(t *testing.T) {
 		})
 	}
 }
+
+func TestAsTimestampsAlignedWithTimeSteps(t *testing.T) {
+	dt := []int{300, 900, 900}
+
+	before := time.Now()
+	ts := asTimestamps(dt)
+	after := time.Now()
+
+	require.Len(t, ts, len(dt))
+
+	assert.WithinDuration(t, before, ts[0], time.Second)
+	assert.WithinDuration(t, after, ts[0], time.Second)
+	assert.Equal(t, time.Duration(dt[0])*time.Second, ts[1].Sub(ts[0]))
+	assert.Equal(t, time.Duration(dt[1])*time.Second, ts[2].Sub(ts[1]))
+}

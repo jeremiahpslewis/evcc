@@ -577,10 +577,6 @@ func solarRatesToEnergy(rr api.Rates) (api.Rates, error) {
 	return res, nil
 }
 
-func endOfHour(ts time.Time) time.Time {
-	return ts.Truncate(time.Hour).Add(time.Hour)
-}
-
 func currentRates(tariff api.Tariff) api.Rates {
 	if tariff == nil {
 		return nil
@@ -616,11 +612,12 @@ func timeSteps(minLen int) []int {
 
 func asTimestamps(dt []int) []time.Time {
 	res := make([]time.Time, 0, len(dt))
-	eoh := endOfHour(time.Now())
-	res = append(res, eoh.Add(-time.Duration(dt[0])*time.Second))
-	for i := range len(dt) - 1 {
-		res = append(res, eoh.Add(time.Duration(dt[i+1])*time.Second))
+	ts := time.Now()
+	for _, step := range dt {
+		res = append(res, ts)
+		ts = ts.Add(time.Duration(step) * time.Second)
 	}
+
 	return res
 }
 
