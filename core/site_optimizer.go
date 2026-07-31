@@ -512,6 +512,15 @@ func (site *Site) optimizerUpdate(battery []types.Measurement) error {
 	// end of horizon Wh value
 	pa := lo.Min(req.TimeSeries.PN) * eta * 0.99
 
+	// the strategy only breaks ties, so knowing the price spread it works against is
+	// what makes a "the strategy does nothing" report diagnosable
+	site.log.DEBUG.Printf("optimizer: strategy %s: grid %.4f..%.4f, feed-in %.4f..%.4f, horizon value %.4f per kWh",
+		req.Strategy.ChargingStrategy,
+		lo.Min(req.TimeSeries.PN)*1e3, lo.Max(req.TimeSeries.PN)*1e3,
+		lo.Min(req.TimeSeries.PE)*1e3, lo.Max(req.TimeSeries.PE)*1e3,
+		pa*1e3,
+	)
+
 	details := requestDetails{
 		Timestamps: asTimestamps(dt, now),
 	}
@@ -607,6 +616,14 @@ func (site *Site) optimizerUpdate(battery []types.Measurement) error {
 		Res:     *resp.JSON200,
 		Details: details,
 	})
+
+	// the grid peaks are what the attenuate_* strategies act on, so logging them makes
+	// the effect of a changed strategy visible without inspecting the raw result
+	site.log.DEBUG.Printf("optimizer: %s: grid peaks: import %.0fW, feed-in %.0fW",
+		resp.JSON200.Status,
+		peakPower(resp.JSON200.GridImport, dt),
+		peakPower(resp.JSON200.GridExport, dt),
+	)
 
 	if resp.JSON200.Status != optimizer.Optimal {
 		return errors.New(string(resp.JSON200.Status))
@@ -888,6 +905,19 @@ func (site *Site) batteryRequest(dev config.Device[api.Meter], b types.Measureme
 	}
 
 	return bat, detail
+}
+
+// peakPower returns the highest power in W of a per-slot energy series in Wh. Slots
+// carry their own duration, so the first, partial slot converts with its own length.
+func peakPower(energy []float32, dt []int) float64 {
+	var res float64
+	for i, v := range energy {
+		if i >= len(dt) || dt[i] <= 0 {
+			break
+		}
+		res = max(res, float64(v)*3600/float64(dt[i]))
+	}
+	return res
 }
 
 func matchSoc(ts []float32, fun func(float32) bool) time.Time {

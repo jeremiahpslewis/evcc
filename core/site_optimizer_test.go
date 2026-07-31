@@ -274,6 +274,16 @@ func TestOptimizerChargingStrategy(t *testing.T) {
 	assert.Equal(t, "attenuate_grid_peaks", site.GetOptimizerChargingStrategy())
 }
 
+func TestPeakPower(t *testing.T) {
+	// 15min slots: 250Wh -> 1000W, the partial first slot converts with its own length
+	assert.Equal(t, float64(1000), peakPower([]float32{250, 100}, []int{900, 900}))
+	assert.Equal(t, float64(2000), peakPower([]float32{100, 250}, []int{180, 900}))
+
+	// no data, and a series longer than the durations it has
+	assert.Equal(t, float64(0), peakPower(nil, nil))
+	assert.Equal(t, float64(400), peakPower([]float32{100, 9999}, []int{900}))
+}
+
 func TestOptimizerDue(t *testing.T) {
 	t.Cleanup(func() {
 		optimizerPending.Store(false)
