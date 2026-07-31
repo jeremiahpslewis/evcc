@@ -137,7 +137,7 @@ export default defineComponent({
 	mixins: [formatter],
 	data() {
 		return {
-			pending: false,
+			refreshing: false,
 		};
 	},
 	head() {
@@ -155,6 +155,15 @@ export default defineComponent({
 		},
 		optimizerChargingStrategy(): string {
 			return store.state.optimizerChargingStrategy || "";
+		},
+		resultStrategy(): string {
+			return this.evopt?.req?.strategy?.charging_strategy || "";
+		},
+		pending(): boolean {
+			if (this.refreshing) return true;
+			// the plan on display was optimized for a different secondary goal - showing it
+			// as the result of the selected one would misattribute a stale plan
+			return !!this.resultStrategy && this.resultStrategy !== this.optimizerChargingStrategy;
 		},
 		netCost(): number {
 			return (this.evopt?.res?.objective_value || 0) * -1;
@@ -196,15 +205,17 @@ export default defineComponent({
 	watch: {
 		"evopt.updated"() {
 			// re-enable the refresh action once a fresh optimizer run lands
-			this.pending = false;
+			this.refreshing = false;
 		},
 	},
 	methods: {
 		optimizeNow() {
-			this.pending = true;
+			this.refreshing = true;
 			api.post("optimize");
 		},
 		changeChargingStrategy(value: string) {
+			// the backend re-runs on change; the result on display is stale until it lands
+			this.refreshing = true;
 			api.post(`optimizerchargingstrategy/${value}`);
 		},
 		dimColorBy25Percent(color: string): string {

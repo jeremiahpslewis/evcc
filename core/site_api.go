@@ -44,6 +44,9 @@ func (site *Site) Optimize() error {
 		return api.ErrNotAvailable
 	}
 
+	// an explicit refresh must not be swallowed by the debounce window
+	optimizerPending.Store(true)
+
 	go site.optimizerUpdateAsync()
 	return nil
 }

@@ -274,6 +274,65 @@ func TestOptimizerChargingStrategy(t *testing.T) {
 	assert.Equal(t, "attenuate_grid_peaks", site.GetOptimizerChargingStrategy())
 }
 
+func TestOptimizerDue(t *testing.T) {
+	t.Cleanup(func() {
+		optimizerPending.Store(false)
+		optimizerUpdated.Store(0)
+	})
+
+	// never run before
+	optimizerPending.Store(false)
+	optimizerUpdated.Store(0)
+	assert.True(t, optimizerDue(), "first run")
+
+	// inside the debounce window without a request
+	optimizerUpdated.Store(time.Now().UnixNano())
+	assert.False(t, optimizerDue(), "debounced")
+
+	// a request runs regardless of the debounce window and is consumed
+	optimizerPending.Store(true)
+	assert.True(t, optimizerDue(), "pending request")
+	assert.False(t, optimizerDue(), "request consumed")
+
+	// debounce window elapsed
+	optimizerUpdated.Store(time.Now().Add(-optimizerDebounce).UnixNano())
+	assert.True(t, optimizerDue(), "debounce elapsed")
+}
+
+func TestOptimizerLoopPicksUpPendingRequest(t *testing.T) {
+	t.Cleanup(func() {
+		optimizerPending.Store(false)
+		optimizerUpdated.Store(0)
+	})
+
+	// a setting changed while the run was in flight must not be dropped, otherwise the
+	// previous setting's plan stays on display until the next slot
+	optimizerUpdated.Store(time.Now().UnixNano())
+	optimizerPending.Store(true)
+
+	var runs int
+	optimizerLoop(func() {
+		runs++
+		optimizerUpdated.Store(time.Now().UnixNano())
+		if runs == 1 {
+			optimizerPending.Store(true) // setting changed during the run
+		}
+	})
+
+	assert.Equal(t, 2, runs)
+	assert.False(t, optimizerPending.Load())
+
+	// without a request the debounce window ends the loop after a single run
+	optimizerUpdated.Store(0)
+	runs = 0
+	optimizerLoop(func() {
+		runs++
+		optimizerUpdated.Store(time.Now().UnixNano())
+	})
+
+	assert.Equal(t, 1, runs)
+}
+
 func TestBlendMeasured(t *testing.T) {
 	slots := []float64{100, 100, 100, 100, 100, 100}
 	blendMeasured(slots, 200, 4)

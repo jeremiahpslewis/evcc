@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/evcc-io/evcc/api"
@@ -34,9 +35,25 @@ var (
 	eta          = float32(0.9)  // efficiency of the battery charging/discharging
 	batteryPower = float32(6000) // default power of the battery in W
 
-	mu               sync.Mutex
-	optimizerUpdated time.Time
+	// optimizerRunning is held for the duration of a run to serialize the optimizer
+	optimizerRunning sync.Mutex
+
+	// optimizerUpdated is the completion time of the last run in unix nanoseconds. It is
+	// read from the site loop while a run may be writing it, hence atomic.
+	optimizerUpdated atomic.Int64
+
+	// optimizerPending records a settings change or manual refresh that must be optimized
+	// even while a run is in flight or the debounce window is still open
+	optimizerPending atomic.Bool
 )
+
+// optimizerDebounce is the minimum interval between two unsolicited optimizer runs
+const optimizerDebounce = 2 * time.Minute
+
+// optimizerLastUpdate returns the completion time of the last optimizer run
+func optimizerLastUpdate() time.Time {
+	return time.Unix(0, optimizerUpdated.Load())
+}
 
 // optimizerChargingStrategies are the valid grid charging strategies; the first
 // entry is the default and preserves the previous hard-coded behavior.
@@ -55,17 +72,15 @@ const optimizerDecaySlots = 4
 
 // triggerOptimizer re-runs the optimizer immediately so a changed setting takes
 // effect without waiting for the next slot. It is a no-op when the optimizer is
-// not active or a run is already in progress; the running update reflects the
-// change on its next slot.
+// not active. When a run is already in flight the request is recorded and picked
+// up as soon as that run finishes - dropping it would leave the plan of the
+// previous setting on display until the next slot, labelled with the new setting.
 func (site *Site) triggerOptimizer() {
 	if !sponsor.IsAuthorized() || !optimizerEnabled() {
 		return
 	}
-	if !mu.TryLock() {
-		return
-	}
-	optimizerUpdated = time.Time{} // bypass the slot/debounce gate
-	mu.Unlock()
+
+	optimizerPending.Store(true)
 
 	go site.optimizerUpdateAsync()
 }
@@ -353,15 +368,37 @@ const slotsPerHour = float64(time.Hour / tariff.SlotDuration)
 var errOptimizerNotReady = errors.New("battery measurements not ready")
 
 func (site *Site) optimizerUpdateAsync() {
-	if !mu.TryLock() {
+	if !optimizerRunning.TryLock() {
+		// a run is in flight, it picks up the pending request when it finishes
 		return
 	}
-	defer mu.Unlock()
+	defer optimizerRunning.Unlock()
 
-	if time.Since(optimizerUpdated) < 2*time.Minute {
-		return
+	optimizerLoop(site.optimizerRun)
+}
+
+// optimizerDue reports whether a run is due, consuming a pending request. A pending
+// request runs regardless of the debounce window, an unsolicited one has to wait it out.
+func optimizerDue() bool {
+	pending := optimizerPending.Swap(false)
+	return pending || time.Since(optimizerLastUpdate()) >= optimizerDebounce
+}
+
+// optimizerLoop runs while due. It repeats as long as requests keep arriving during a
+// run, so the published result always reflects the settings as of its own start instead
+// of leaving the previous settings' plan on display until the next slot.
+func optimizerLoop(run func()) {
+	for optimizerDue() {
+		run()
+
+		if !optimizerPending.Load() {
+			return
+		}
 	}
+}
 
+// optimizerRun performs a single optimizer run and records its completion
+func (site *Site) optimizerRun() {
 	var err error
 
 	defer func() {
@@ -374,7 +411,7 @@ func (site *Site) optimizerUpdateAsync() {
 			return
 		}
 
-		optimizerUpdated = time.Now()
+		optimizerUpdated.Store(time.Now().UnixNano())
 
 		if err != nil {
 			site.log.ERROR.Println("optimizer:", err)

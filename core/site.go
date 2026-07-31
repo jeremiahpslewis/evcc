@@ -935,7 +935,7 @@ func (site *Site) updateMeters() error {
 		return err
 	}
 
-	if sponsor.IsAuthorized() && optimizerEnabled() && time.Since(optimizerUpdated) >= tariff.SlotDuration {
+	if sponsor.IsAuthorized() && optimizerEnabled() && time.Since(optimizerLastUpdate()) >= tariff.SlotDuration {
 		go site.optimizerUpdateAsync()
 	}
 

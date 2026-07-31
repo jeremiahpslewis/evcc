@@ -803,9 +803,16 @@ export interface EvOpt {
 export interface OptimizationInput {
   batteries: BatteryConfig[]; // Battery configurations
   time_series: TimeSeries; // Time series data
+  strategy?: OptimizationStrategy; // Tie-break strategies the result was computed with
   eta_c?: number; // Charging efficiency (0-1), default 0.95
   eta_d?: number; // Discharging efficiency (0-1), default 0.95
   M?: number; // Big M value for MILP constraints
+}
+
+// Strategies applied where choices are cost neutral
+export interface OptimizationStrategy {
+  charging_strategy?: string; // e.g. charge_before_export, attenuate_feedin_peaks
+  discharging_strategy?: string; // e.g. discharge_before_import
 }
 
 // Battery configuration
