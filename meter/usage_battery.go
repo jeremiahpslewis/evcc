@@ -2,6 +2,7 @@ package meter
 
 import (
 	"context"
+	"errors"
 
 	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/plugin"
@@ -122,6 +123,26 @@ func (m *batteryPowerLimitsCtx) Decorator(ctx context.Context) (func() (float64,
 	}
 	return func() (float64, float64) {
 		return charge(), discharge()
+	}, nil
+}
+
+// ChargePowerLimitController returns an api.BatteryChargePowerLimiter decorator (experimental).
+// The limit is clamped to [0, maxchargepower]; a nil limit restores maxchargepower.
+func (m *batteryPowerLimitsCtx) ChargePowerLimitController(ctx context.Context, limitS func(float64) error) (func(*float64) error, error) {
+	chargeG, err := resolveFloat(ctx, m.MaxChargePower)
+	if err != nil {
+		return nil, err
+	}
+	if chargeG == nil {
+		return nil, errors.New("battery charge power limit requires maxchargepower")
+	}
+
+	return func(power *float64) error {
+		limit := chargeG()
+		if power != nil {
+			limit = min(limit, max(0, *power))
+		}
+		return limitS(limit)
 	}, nil
 }
 

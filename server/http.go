@@ -167,6 +167,10 @@ func (s *HTTPd) RegisterSiteHandlers(site site.API) {
 		"devicecolors":            {"PUT", "/devicecolors", updateDeviceColor(site)},
 
 		"optimizerchargingstrategy": {"POST", "/optimizerchargingstrategy/{value:[a-z_]+}", stringHandler(site.SetOptimizerChargingStrategy, site.GetOptimizerChargingStrategy)},
+
+		// external battery charge power limit (experimental)
+		"batterychargepowerlimit":       {"POST", "/batterychargepowerlimit/{value:[0-9.]+}", floatPtrHandler(site.SetBatteryChargePowerLimitExternal, site.GetBatteryChargePowerLimitExternal)},
+		"batterychargepowerlimitdelete": {"DELETE", "/batterychargepowerlimit", floatPtrHandler(site.SetBatteryChargePowerLimitExternal, site.GetBatteryChargePowerLimitExternal)},
 	}
 
 	for _, r := range routes {

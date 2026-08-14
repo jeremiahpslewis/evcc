@@ -37,6 +37,9 @@ type typeStruct struct {
 }
 
 func getTypeImport(t reflect.Type) string {
+	if t.Kind() == reflect.Pointer {
+		return "*" + getTypeImport(t.Elem())
+	}
 	n := t.Name()
 	if p := t.PkgPath(); p != "" {
 		if s := strings.Split(p, "github.com/evcc-io/evcc/"); len(s) == 2 {
@@ -60,6 +63,7 @@ func generate(out io.Writer) error {
 	for _, typ := range []reflect.Type{
 		reflect.TypeFor[api.Battery](),
 		reflect.TypeFor[api.BatteryCapacity](),
+		reflect.TypeFor[api.BatteryChargePowerLimiter](),
 		reflect.TypeFor[api.BatteryController](),
 		reflect.TypeFor[api.BatteryPowerLimiter](),
 		reflect.TypeFor[api.BatterySocLimiter](),
