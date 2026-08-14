@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/evcc-io/evcc/api"
+	"github.com/evcc-io/evcc/api/implement"
 	"github.com/evcc-io/evcc/util"
 	"github.com/evcc-io/evcc/util/config"
 	"github.com/stretchr/testify/assert"
@@ -193,6 +194,99 @@ func TestExternalBatteryModeChange(t *testing.T) {
 
 		ctrl.Finish()
 	}
+}
+
+func TestExternalBatteryChargePowerLimit(t *testing.T) {
+	var writes []*float64
+
+	var bat api.Meter = &struct {
+		api.Meter
+		api.BatteryChargePowerLimiter
+	}{
+		BatteryChargePowerLimiter: implement.BatteryChargePowerLimiter(func(power *float64) error {
+			writes = append(writes, power)
+			return nil
+		}),
+	}
+
+	site := &Site{
+		log:           util.NewLogger("foo"),
+		batteryMeters: []config.Device[api.Meter]{config.NewStaticDevice(config.Named{}, bat)},
+	}
+
+	// 1. first update cycle restores device maximum, once
+	site.updateBatteryChargePowerLimit()
+	site.updateBatteryChargePowerLimit()
+	assert.Equal(t, []*float64{nil}, writes)
+
+	// 2. external limit applied to battery, once
+	limit := 2000.0
+	assert.NoError(t, site.SetBatteryChargePowerLimitExternal(&limit))
+	assert.False(t, site.batteryChargePowerLimitTimer.IsZero())
+
+	site.updateBatteryChargePowerLimit()
+	site.updateBatteryChargePowerLimit()
+	assert.Equal(t, []*float64{nil, &limit}, writes)
+
+	// 3. watchdog expiry releases the limit
+	site.batteryChargePowerLimitTimer = site.batteryChargePowerLimitTimer.Add(-time.Hour)
+	site.batteryChargePowerLimitWatchdogExpired()
+
+	assert.Nil(t, site.GetBatteryChargePowerLimitExternal())
+	assert.True(t, site.batteryChargePowerLimitTimer.IsZero())
+
+	// battery restored to device maximum
+	site.updateBatteryChargePowerLimit()
+	assert.Equal(t, []*float64{nil, &limit, nil}, writes)
+}
+
+func TestExternalBatteryChargePowerLimitHoldCharge(t *testing.T) {
+	var writes []*float64
+
+	var bat api.Meter = &struct {
+		api.Meter
+		api.BatteryChargePowerLimiter
+	}{
+		BatteryChargePowerLimiter: implement.BatteryChargePowerLimiter(func(power *float64) error {
+			writes = append(writes, power)
+			return nil
+		}),
+	}
+
+	site := &Site{
+		log:           util.NewLogger("foo"),
+		batteryMeters: []config.Device[api.Meter]{config.NewStaticDevice(config.Named{}, bat)},
+		batteryMode:   api.BatteryNormal,
+	}
+
+	limit := 2000.0
+	assert.NoError(t, site.SetBatteryChargePowerLimitExternal(&limit))
+	site.updateBatteryChargePowerLimit()
+	assert.Equal(t, []*float64{&limit}, writes)
+
+	// holdcharge blocks charging - limit not written while active
+	site.SetBatteryMode(api.BatteryHoldCharge)
+	newLimit := 1000.0
+	assert.NoError(t, site.SetBatteryChargePowerLimitExternal(&newLimit))
+	site.updateBatteryChargePowerLimit()
+	assert.Equal(t, []*float64{&limit}, writes)
+
+	// leaving holdcharge re-applies the limit
+	site.SetBatteryMode(api.BatteryNormal)
+	site.updateBatteryChargePowerLimit()
+	assert.Equal(t, []*float64{&limit, &newLimit}, writes)
+}
+
+func TestExternalBatteryChargePowerLimitWithoutControl(t *testing.T) {
+	var bat api.Meter = &struct{ api.Meter }{}
+
+	site := &Site{
+		log:           util.NewLogger("foo"),
+		batteryMeters: []config.Device[api.Meter]{config.NewStaticDevice(config.Named{}, bat)},
+	}
+
+	limit := 2000.0
+	assert.ErrorIs(t, site.SetBatteryChargePowerLimitExternal(&limit), ErrBatteryControlNotAvailable)
 }
 
 func TestForcedBatteryChargeLimits(t *testing.T) {

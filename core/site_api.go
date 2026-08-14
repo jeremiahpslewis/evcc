@@ -537,6 +537,81 @@ func (site *Site) SetBatteryModeExternal(mode api.BatteryMode) error {
 	return nil
 }
 
+// GetBatteryChargePowerLimitExternal returns the external battery charge power limit (experimental)
+func (site *Site) GetBatteryChargePowerLimitExternal() *float64 {
+	site.RLock()
+	defer site.RUnlock()
+	return site.batteryChargePowerLimit
+}
+
+// SetBatteryChargePowerLimitExternal sets the external battery charge power limit in W (experimental).
+// A nil limit removes the limit and restores the devices' maximum charge power.
+func (site *Site) SetBatteryChargePowerLimitExternal(limit *float64) error {
+	site.log.DEBUG.Println("set external battery charge power limit:", printPtr("%.0f", limit))
+
+	if !site.hasBatteryChargePowerControl() {
+		return ErrBatteryControlNotAvailable
+	}
+
+	if limit != nil && *limit < 0 {
+		return errors.New("battery charge power limit must not be negative")
+	}
+
+	site.Lock()
+	defer site.Unlock()
+
+	disable := limit == nil
+
+	if !ptrValueEqual(site.batteryChargePowerLimit, limit) {
+		site.batteryChargePowerLimit = limit
+		site.batteryChargePowerLimitApplied = false
+
+		if disable {
+			site.publish(keys.BatteryChargePowerLimit, nil)
+		} else {
+			site.publish(keys.BatteryChargePowerLimit, *limit)
+		}
+	}
+
+	if disable {
+		site.batteryChargePowerLimitTimer = time.Time{}
+	} else {
+		// start watchdog if not running
+		if site.batteryChargePowerLimitTimer.IsZero() {
+			go func() {
+				for range time.Tick(time.Second) {
+					if site.batteryChargePowerLimitWatchdogExpired() {
+						return
+					}
+				}
+			}()
+		}
+
+		// reset timer
+		site.batteryChargePowerLimitTimer = time.Now()
+	}
+
+	return nil
+}
+
+func (site *Site) batteryChargePowerLimitWatchdogExpired() bool {
+	site.RLock()
+	timer := site.batteryChargePowerLimitTimer
+	site.RUnlock()
+
+	// limit released - stop watchdog
+	if timer.IsZero() {
+		return true
+	}
+
+	if time.Since(timer) > time.Minute {
+		site.SetBatteryChargePowerLimitExternal(nil)
+		return true
+	}
+
+	return false
+}
+
 func (site *Site) batteryModeWatchdogExpired() bool {
 	site.RLock()
 	elapsed := time.Since(site.batteryModeExternalTimer)

@@ -45,6 +45,10 @@ func (site *Site) SetBatteryMode(batMode api.BatteryMode) {
 	site.log.DEBUG.Println("set battery mode:", batMode)
 
 	if site.batteryMode != batMode {
+		// holdcharge blocked charging; re-apply the charge power limit after leaving it
+		if site.batteryMode == api.BatteryHoldCharge {
+			site.batteryChargePowerLimitApplied = false
+		}
 		site.setBatteryMode(batMode)
 	}
 
@@ -178,6 +182,65 @@ func (site *Site) applyBatteryMode(mode api.BatteryMode) error {
 			} else if !errors.Is(err, api.ErrNotAvailable) {
 				return err
 			}
+		}
+	}
+
+	return nil
+}
+
+// hasBatteryChargePowerControl determines if any battery meter supports limiting charge power
+func (site *Site) hasBatteryChargePowerControl() bool {
+	for _, dev := range site.batteryMeters {
+		if api.HasCap[api.BatteryChargePowerLimiter](dev.Instance()) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// updateBatteryChargePowerLimit applies the external battery charge power limit when changed (experimental).
+// The first update cycle always writes the limit to make device state known after restart.
+func (site *Site) updateBatteryChargePowerLimit() {
+	site.Lock()
+	limit := site.batteryChargePowerLimit
+	applied := site.batteryChargePowerLimitApplied
+	holdCharge := site.batteryMode == api.BatteryHoldCharge
+	site.Unlock()
+
+	// holdcharge blocks charging entirely - do not overwrite the block with a limit
+	if applied || holdCharge {
+		return
+	}
+
+	if err := site.applyBatteryChargePowerLimit(limit); err != nil {
+		site.log.ERROR.Println("battery charge power limit:", err)
+		return
+	}
+
+	site.Lock()
+	// only mark applied if the limit hasn't changed while applying
+	if ptrValueEqual(site.batteryChargePowerLimit, limit) {
+		site.batteryChargePowerLimitApplied = true
+	}
+	site.Unlock()
+}
+
+// applyBatteryChargePowerLimit applies the charge power limit to each battery.
+// A nil limit restores the device's maximum charge power.
+func (site *Site) applyBatteryChargePowerLimit(limit *float64) error {
+	for _, dev := range site.batteryMeters {
+		meter := dev.Instance()
+
+		batLimiter, ok := api.Cap[api.BatteryChargePowerLimiter](meter)
+		if !ok {
+			continue
+		}
+
+		if err := batLimiter.SetBatteryChargePowerLimit(limit); err == nil {
+			site.log.DEBUG.Printf("set battery %s charge power limit: %s", deviceTitleOrName(dev), printPtr("%.0fW", limit))
+		} else if !errors.Is(err, api.ErrNotAvailable) {
+			return err
 		}
 	}
 

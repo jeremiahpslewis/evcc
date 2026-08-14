@@ -88,6 +88,12 @@ type BatteryController interface {
 	SetBatteryMode(BatteryMode) error
 }
 
+// BatteryChargePowerLimiter optionally allows to limit home battery charge power in W (experimental).
+// A nil limit removes the limit and restores the device's maximum charge power.
+type BatteryChargePowerLimiter interface {
+	SetBatteryChargePowerLimit(power *float64) error
+}
+
 // Charger provides current charging status and enable/disable charging
 type Charger interface {
 	ChargeState

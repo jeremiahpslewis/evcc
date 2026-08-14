@@ -115,6 +115,11 @@ type Site struct {
 	batterySuggestions       map[string]types.Suggestion // Optimizer suggestions by battery meter name
 	loadpointSuggestions     map[int]types.Suggestion    // Optimizer suggestions by loadpoint id
 	suggestionActions        map[string]string           // last notified actionable optimizer action by device key
+
+	// external battery charge power limit (experimental, runtime only, not persisted)
+	batteryChargePowerLimit        *float64  // limit in W, nil = no limit
+	batteryChargePowerLimitTimer   time.Time // timer for external control watchdog
+	batteryChargePowerLimitApplied bool      // limit has been applied to devices
 }
 
 // MetersConfig contains the site's meter configuration
@@ -310,6 +315,13 @@ func (site *Site) Boot(log *util.Logger, loadpoints []*Loadpoint, tariffs *tarif
 		if mode := site.GetBatteryMode(); batteryModeModified(mode) {
 			if err := site.applyBatteryMode(api.BatteryNormal); err != nil {
 				site.log.ERROR.Println("battery mode:", err)
+			}
+		}
+
+		// restore maximum battery charge power on shutdown
+		if site.GetBatteryChargePowerLimitExternal() != nil {
+			if err := site.applyBatteryChargePowerLimit(nil); err != nil {
+				site.log.ERROR.Println("battery charge power limit:", err)
 			}
 		}
 	})
@@ -1189,6 +1201,7 @@ func (site *Site) update(lp updater) {
 	batteryGridChargeActive := site.batteryGridChargeActive(rate)
 	site.publish(keys.BatteryGridChargeActive, batteryGridChargeActive)
 	site.updateBatteryMode(batteryGridChargeActive, rate)
+	site.updateBatteryChargePowerLimit()
 
 	// re-evaluate against the updated loadpoint state
 	site.publishSuggestions()
