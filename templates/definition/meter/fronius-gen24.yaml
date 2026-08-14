@@ -33,6 +33,16 @@ params:
   - name: maxacpower
   - preset: battery-params
   - name: maxchargerate
+  - name: chargepowerlimit
+    type: bool
+    advanced: true
+    usages: ["battery"]
+    description:
+      en: External charge power limit control
+      de: Externe Begrenzung der Ladeleistung
+    help:
+      en: "Experimental: allows limiting the battery charge power externally via the evcc API. Requires maxchargepower to be configured."
+      de: "Experimentell: erlaubt die externe Begrenzung der Batterie-Ladeleistung über die evcc API. Erfordert die Angabe von maxchargepower."
 render: |
   type: custom
   # sunspec model 20x (int+sf)/ 21x (float) meter
@@ -170,6 +180,8 @@ render: |
   maxacpower: {{ .maxacpower }} # W
   {{- end }}
   {{- if eq .usage "battery" }}
+  {{- /* keep StorCtl_Mod bit 0 (charge limit) set in all modes so InWRte stays authoritative for the external charge power limit */}}
+  {{- $chargelimit := and .chargepowerlimit .maxchargepower }}
   power:
     source: calc
     add:
@@ -207,7 +219,7 @@ render: |
         source: sequence
         set:
         - source: const
-          value: 0
+          value: {{ if $chargelimit }}1{{ else }}0{{ end }}
           set:
             source: sunspec
             uri: {{ joinHostPort .host .port }}
@@ -225,7 +237,7 @@ render: |
         source: sequence
         set:
         - source: const
-          value: 2
+          value: {{ if $chargelimit }}3{{ else }}2{{ end }}
           set:
             source: sunspec
             uri: {{ joinHostPort .host .port }}
@@ -250,7 +262,7 @@ render: |
             id: 1
             value: 124:0:ChaGriSet
         - source: const
-          value: 2
+          value: {{ if $chargelimit }}3{{ else }}2{{ end }}
           set:
             source: sunspec
             uri: {{ joinHostPort .host .port }}
@@ -281,5 +293,13 @@ render: |
             uri: {{ .host }}:{{ .port }}
             id: 1
             value: 124:0:InWRte
+  {{- if $chargelimit }}
+  limitchargepower: # W, converted to % of maxchargepower (model 124 InWRte)
+    source: sunspec
+    uri: {{ joinHostPort .host .port }}
+    id: 1
+    value: 124:0:InWRte
+    scale: {{ divf 100 .maxchargepower }}
+  {{- end }}
   {{- include "battery-params" . }}
   {{- end }}
