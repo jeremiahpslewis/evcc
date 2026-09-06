@@ -665,25 +665,27 @@ func (site *Site) optimizerUpdate(battery []types.Measurement) error {
 		return errors.New("inconsistent optimizer result dimensions")
 	}
 
-	slot := activeOptimizerSlot(details.Timestamps, req.TimeSeries.Dt, time.Now())
-	if slot < 0 {
+	now := time.Now()
+	schedule := optimizerSchedule{timestamps: details.Timestamps, dt: req.TimeSeries.Dt}
+	if schedule.activeSlot(now) < 0 {
 		return errors.New("optimizer result expired")
 	}
 
-	site.applyOptimizerResult(req, details, *resp.JSON200, slot)
+	site.applyOptimizerResult(req, details, *resp.JSON200, schedule, now)
 
 	return nil
 }
 
 // applyOptimizerResult maps the optimizer response onto suggestions, battery
 // forecast and notifications
-func (site *Site) applyOptimizerResult(req optimizer.OptimizationInput, details requestDetails, res optimizer.OptimizationResult, slot int) {
-	slotHours := (time.Duration(req.TimeSeries.Dt[slot]) * time.Second).Hours()
+func (site *Site) applyOptimizerResult(req optimizer.OptimizationInput, details requestDetails, res optimizer.OptimizationResult, schedule optimizerSchedule, now time.Time) {
+	slot := schedule.controlSlot(now)
+	slotHours := schedule.duration(slot).Hours()
 	var gridImport, gridExport float32
-	if slot < len(res.GridImport) {
+	if slot >= 0 && slot < len(res.GridImport) {
 		gridImport = res.GridImport[slot]
 	}
-	if slot < len(res.GridExport) {
+	if slot >= 0 && slot < len(res.GridExport) {
 		gridExport = res.GridExport[slot]
 	}
 
@@ -696,10 +698,10 @@ func (site *Site) applyOptimizerResult(req optimizer.OptimizationInput, details 
 
 		batteries = append(batteries, batteryResult{
 			batteryDetail: detail,
-			Full: matchSoc(batRes.StateOfCharge, details.Timestamps, req.TimeSeries.Dt, slot, func(soc float32) bool {
+			Full: matchSoc(batRes.StateOfCharge, schedule, now, func(soc float32) bool {
 				return soc >= batReq.SMax
 			}),
-			Empty: matchSoc(batRes.StateOfCharge, details.Timestamps, req.TimeSeries.Dt, slot, func(soc float32) bool {
+			Empty: matchSoc(batRes.StateOfCharge, schedule, now, func(soc float32) bool {
 				return soc <= batReq.SMin
 			}),
 		})
@@ -718,7 +720,7 @@ func (site *Site) applyOptimizerResult(req optimizer.OptimizationInput, details 
 	site.publish("evopt-batteries", batteries)
 
 	site.setSuggestions(suggestions)
-	site.setBatteryForecast(site.addBatteryForecastTotals(req.Batteries, res.Batteries, details.Timestamps, req.TimeSeries.Dt, slot))
+	site.setBatteryForecast(site.addBatteryForecastTotals(req.Batteries, res.Batteries, schedule, now))
 
 	site.publishBattery()
 
@@ -731,23 +733,22 @@ func (site *Site) applyOptimizerResult(req optimizer.OptimizationInput, details 
 	}
 }
 
-func (site *Site) addBatteryForecastTotals(req []optimizer.BatteryConfig, resp []optimizer.BatteryResult, timestamps []time.Time, dt []int, slot int) *types.BatteryForecast {
+func (site *Site) addBatteryForecastTotals(req []optimizer.BatteryConfig, resp []optimizer.BatteryResult, schedule optimizerSchedule, now time.Time) *types.BatteryForecast {
 	if len(resp) == 0 || len(resp[0].StateOfCharge) == 0 {
 		return nil
 	}
 
-	high, low := batteryForecastSocExtremes(req, resp, slot)
+	high, low := batteryForecastSocExtremes(req, resp, schedule, now)
 	if high == nil && low == nil {
 		return nil
 	}
 
-	cutoff := time.Now()
 	point := func(p *batteryForecastSlot) *types.BatteryForecastPoint {
 		if p == nil {
 			return nil
 		}
-		ts := optimizerSlotEnd(timestamps, dt, p.slot)
-		if !ts.After(cutoff) {
+		ts := schedule.end(p.slot)
+		if !ts.After(now) {
 			return nil
 		}
 		return &types.BatteryForecastPoint{Soc: p.soc, Time: ts, Limit: p.limit}
@@ -776,7 +777,8 @@ type batteryForecastSlot struct {
 // the battery is forecasted to become fully charged or empty.
 // Returns nil for either point when no home battery is present or when the
 // battery already is at the respective limit.
-func batteryForecastSocExtremes(req []optimizer.BatteryConfig, resp []optimizer.BatteryResult, slot int) (*batteryForecastSlot, *batteryForecastSlot) {
+func batteryForecastSocExtremes(req []optimizer.BatteryConfig, resp []optimizer.BatteryResult, schedule optimizerSchedule, now time.Time) (*batteryForecastSlot, *batteryForecastSlot) {
+	slot := schedule.activeSlot(now)
 	homeIndices := lo.FilterMap(req, func(b optimizer.BatteryConfig, i int) (int, bool) {
 		return i, b.SCapacity > 0
 	})
@@ -795,7 +797,10 @@ func batteryForecastSocExtremes(req []optimizer.BatteryConfig, resp []optimizer.
 	})
 
 	var high, low *batteryForecastSlot
-	for i := slot; i < len(resp[homeIndices[0]].StateOfCharge); i++ {
+	for i := range schedule.remainingSlots(now) {
+		if i >= len(resp[homeIndices[0]].StateOfCharge) {
+			break
+		}
 		sum := lo.SumBy(homeIndices, func(idx int) float32 { return resp[idx].StateOfCharge[i] })
 		soc := float64(sum/totalCapacity) * 100
 		fullReached := totalSMax > 0 && sum >= totalSMax
@@ -981,10 +986,13 @@ func (site *Site) batteryRequest(dev config.Device[api.Meter], b types.Measureme
 }
 
 // matchSoc returns the end of the first slot whose soc satisfies fun.
-func matchSoc(ts []float32, timestamps []time.Time, dt []int, slot int, fun func(float32) bool) time.Time {
-	for i := slot; i >= 0 && i < min(len(ts), len(timestamps), len(dt)); i++ {
+func matchSoc(ts []float32, schedule optimizerSchedule, now time.Time, fun func(float32) bool) time.Time {
+	for i := range schedule.remainingSlots(now) {
+		if i >= len(ts) {
+			break
+		}
 		if fun(ts[i]) {
-			return optimizerSlotEnd(timestamps, dt, i)
+			return schedule.end(i)
 		}
 	}
 
@@ -1223,24 +1231,6 @@ func asTimestamps(dt []int, now time.Time) []time.Time {
 	}
 
 	return res
-}
-
-func activeOptimizerSlot(timestamps []time.Time, dt []int, at time.Time) int {
-	for i := range min(len(timestamps), len(dt)) {
-		if at.Before(optimizerSlotEnd(timestamps, dt, i)) {
-			return i
-		}
-	}
-
-	return -1
-}
-
-func optimizerSlotEnd(timestamps []time.Time, dt []int, slot int) time.Time {
-	if slot < 0 || slot >= len(timestamps) || slot >= len(dt) {
-		return time.Time{}
-	}
-
-	return timestamps[slot].Add(time.Duration(dt[slot]) * time.Second)
 }
 
 func scaleAndPrune(rates api.Rates, scale float64, maxLen int) []float32 {

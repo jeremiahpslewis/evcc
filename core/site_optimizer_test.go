@@ -151,28 +151,6 @@ func TestAsTimestamps(t *testing.T) {
 	}, got)
 }
 
-func TestActiveOptimizerSlot(t *testing.T) {
-	boundary := time.Date(2025, 1, 1, 12, 15, 0, 0, time.UTC)
-	timestamps := []time.Time{boundary.Add(-2 * time.Second), boundary, boundary.Add(tariff.SlotDuration)}
-	dt := []int{2, int(tariff.SlotDuration.Seconds()), int(tariff.SlotDuration.Seconds())}
-
-	for _, tc := range []struct {
-		name string
-		at   time.Time
-		want int
-	}{
-		{"partial slot", boundary.Add(-time.Second), 0},
-		{"next slot at boundary", boundary, 1},
-		{"next slot after delayed response", boundary.Add(4 * time.Second), 1},
-		{"following slot", boundary.Add(tariff.SlotDuration), 2},
-		{"expired result", boundary.Add(2 * tariff.SlotDuration), -1},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, activeOptimizerSlot(timestamps, dt, tc.at))
-		})
-	}
-}
-
 func TestUnmodelledPower(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -204,6 +182,12 @@ func TestUnmodelledPower(t *testing.T) {
 }
 
 func TestBatteryForecastSocExtremes(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	schedule := optimizerSchedule{
+		timestamps: []time.Time{now, now.Add(tariff.SlotDuration), now.Add(2 * tariff.SlotDuration)},
+		dt:         []int{900, 900, 900},
+	}
+
 	for _, tc := range []struct {
 		name      string
 		req       []optimizer.BatteryConfig
@@ -298,7 +282,7 @@ func TestBatteryForecastSocExtremes(t *testing.T) {
 				resp[i] = optimizer.BatteryResult{StateOfCharge: s}
 			}
 
-			high, low := batteryForecastSocExtremes(tc.req, resp, 0)
+			high, low := batteryForecastSocExtremes(tc.req, resp, schedule, now)
 
 			if tc.high == nil {
 				assert.Nil(t, high, "high")
@@ -323,8 +307,12 @@ func TestBatteryForecastSocExtremes(t *testing.T) {
 func TestBatteryForecastActiveSlot(t *testing.T) {
 	req := []optimizer.BatteryConfig{{SCapacity: 1000, SMax: 1000}}
 	resp := []optimizer.BatteryResult{{StateOfCharge: []float32{1000, 500, 800}}}
+	base := time.Date(2025, 1, 1, 12, 15, 0, 0, time.UTC)
+	timestamps := []time.Time{base.Add(-time.Second), base, base.Add(tariff.SlotDuration)}
+	schedule := optimizerSchedule{timestamps: timestamps, dt: []int{1, 900, 900}}
+	now := base.Add(4 * time.Second)
 
-	high, low := batteryForecastSocExtremes(req, resp, 1)
+	high, low := batteryForecastSocExtremes(req, resp, schedule, now)
 	require.NotNil(t, high)
 	require.NotNil(t, low)
 	assert.Equal(t, 2, high.slot)
@@ -332,11 +320,7 @@ func TestBatteryForecastActiveSlot(t *testing.T) {
 	assert.Equal(t, 1, low.slot)
 	assert.InDelta(t, 50, low.soc, 1e-3)
 
-	base := time.Now().Add(time.Hour).Round(time.Second)
-	timestamps := []time.Time{base.Add(-2 * time.Hour), base, base.Add(tariff.SlotDuration)}
-	dt := []int{60, int(tariff.SlotDuration.Seconds()), int(tariff.SlotDuration.Seconds())}
-
-	forecast := (&Site{}).addBatteryForecastTotals(req, resp, timestamps, dt, 1)
+	forecast := (&Site{}).addBatteryForecastTotals(req, resp, schedule, now)
 	require.NotNil(t, forecast)
 	require.NotNil(t, forecast.Highest)
 	require.NotNil(t, forecast.Lowest)
@@ -344,18 +328,19 @@ func TestBatteryForecastActiveSlot(t *testing.T) {
 	assert.Equal(t, timestamps[1].Add(tariff.SlotDuration), forecast.Lowest.Time)
 
 	resp[0].StateOfCharge = []float32{500, 1000, 800}
-	forecast = (&Site{}).addBatteryForecastTotals(req, resp, timestamps, dt, 1)
+	forecast = (&Site{}).addBatteryForecastTotals(req, resp, schedule, now)
 	require.NotNil(t, forecast)
 	require.NotNil(t, forecast.Highest)
 	assert.True(t, forecast.Highest.Limit)
 	assert.Equal(t, timestamps[1].Add(tariff.SlotDuration), forecast.Highest.Time)
 
 	resp[0].StateOfCharge = []float32{500, 0, 200}
-	forecast = (&Site{}).addBatteryForecastTotals(req, resp, timestamps, dt, 1)
+	forecast = (&Site{}).addBatteryForecastTotals(req, resp, schedule, now)
 	require.NotNil(t, forecast)
 	require.NotNil(t, forecast.Lowest)
 	assert.True(t, forecast.Lowest.Limit)
 	assert.Equal(t, timestamps[1].Add(tariff.SlotDuration), forecast.Lowest.Time)
+	assert.Nil(t, (&Site{}).addBatteryForecastTotals(req, resp, schedule, base.Add(2*tariff.SlotDuration)))
 }
 
 // TestBatteryRequestSocLimitsClamp ensures the reported soc is always clamped into
