@@ -265,6 +265,8 @@ type deviceProbe struct {
 	read func(instance any) (any, error)
 }
 
+// probe pairs a result key with a typed capability getter. A missing capability
+// reports api.ErrNotAvailable, which makeResult drops so no key is emitted.
 func probe[T, V any](key string, read func(T) (V, error)) deviceProbe {
 	return deviceProbe{
 		key: key,
