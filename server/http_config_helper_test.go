@@ -3,11 +3,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/api/globalconfig"
+	"github.com/evcc-io/evcc/api/implement"
 	"github.com/evcc-io/evcc/plugin/mqtt"
 	"github.com/evcc-io/evcc/util/config"
 	"github.com/evcc-io/evcc/util/templates"
@@ -83,6 +85,40 @@ func TestInstanceAsleep(t *testing.T) {
 	res := testInstance(context.Background(), asleepVehicle{})
 	assert.Equal(t, testResult{Value: 0.0, Asleep: true}, res["soc"])
 	assert.Equal(t, testResult{Value: int64(0), Asleep: true}, res["range"])
+}
+
+func TestInstanceScalarProbes(t *testing.T) {
+	meter := func(value float64, err error) api.Meter {
+		return implement.Meter(func() (float64, error) { return value, err })
+	}
+
+	caps := implement.New()
+	implement.Has[api.Meter](caps, meter(42, nil))
+	implement.Has[api.VehicleRange](caps, implement.VehicleRange(func() (int64, error) { return 123, nil }))
+	implement.Has[api.ChargeState](caps, implement.ChargeState(func() (api.ChargeStatus, error) { return api.StatusB, nil }))
+	implement.Has[api.Dimmer](caps, implement.Dimmer(func(bool) error { return nil }, func() (bool, error) { return false, nil }))
+
+	for _, tc := range []struct {
+		name     string
+		instance any
+		want     map[string]testResult
+	}{
+		{"unsupported", struct{}{}, map[string]testResult{}},
+		{"zero", meter(0, nil), map[string]testResult{"power": {Value: 0.0}}},
+		{"direct", meter(42, nil), map[string]testResult{"power": {Value: 42.0}}},
+		{"unavailable", meter(0, api.ErrNotAvailable), map[string]testResult{}},
+		{"error", meter(7, errors.New("read failed")), map[string]testResult{"power": {Value: 7.0, Error: "read failed"}}},
+		{"registered", caps, map[string]testResult{
+			"power":        {Value: 42.0},
+			"range":        {Value: int64(123)},
+			"chargeStatus": {Value: api.StatusB},
+			"dimmed":       {Value: false},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, testInstance(context.Background(), tc.instance))
+		})
+	}
 }
 
 func TestConfigReqUnmarshal(t *testing.T) {

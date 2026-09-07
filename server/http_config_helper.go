@@ -260,6 +260,24 @@ type testResult = struct {
 	Asleep bool   `json:"asleep,omitempty"`
 }
 
+type deviceProbe struct {
+	key  string
+	read func(instance any) (any, error)
+}
+
+func probe[T, V any](key string, read func(T) (V, error)) deviceProbe {
+	return deviceProbe{
+		key: key,
+		read: func(instance any) (any, error) {
+			dev, ok := api.Cap[T](instance)
+			if !ok {
+				return nil, api.ErrNotAvailable
+			}
+			return read(dev)
+		},
+	}
+}
+
 func hasFeature(instance any, f api.Feature) bool {
 	fd, ok := api.Cap[api.FeatureDescriber](instance)
 	return ok && slices.Contains(fd.Features(), f)
@@ -293,26 +311,22 @@ func testInstance(ctx context.Context, instance any) map[string]testResult {
 
 	// probes run concurrently so a responsive getter still returns when another
 	// blocks; slow getters are abandoned once ctx expires (see below)
-	wg.Go(func() {
-		if dev, ok := api.Cap[api.Meter](instance); ok {
-			val, err := dev.CurrentPower()
-			makeResult("power", val, err)
-		}
-	})
-
-	wg.Go(func() {
-		if dev, ok := api.Cap[api.MeterEnergy](instance); ok {
-			val, err := dev.TotalEnergy()
-			makeResult("energy", val, err)
-		}
-	})
-
-	wg.Go(func() {
-		if dev, ok := api.Cap[api.MeterReturnEnergy](instance); ok {
-			val, err := dev.ReturnEnergy()
-			makeResult("returnEnergy", val, err)
-		}
-	})
+	for _, p := range []deviceProbe{
+		probe("power", api.Meter.CurrentPower),
+		probe("energy", api.MeterEnergy.TotalEnergy),
+		probe("returnEnergy", api.MeterReturnEnergy.ReturnEnergy),
+		probe("odometer", api.VehicleOdometer.Odometer),
+		probe("chargeStatus", api.ChargeState.Status),
+		probe("enabled", api.Charger.Enabled),
+		probe("chargedEnergy", api.ChargeRater.ChargedEnergy),
+		probe("range", api.VehicleRange.Range),
+		probe("dimmed", api.Dimmer.Dimmed),
+	} {
+		wg.Go(func() {
+			val, err := p.read(instance)
+			makeResult(p.key, val, err)
+		})
+	}
 
 	wg.Go(func() {
 		if dev, ok := api.Cap[api.Battery](instance); ok {
@@ -328,13 +342,6 @@ func testInstance(ctx context.Context, instance any) map[string]testResult {
 	wg.Go(func() {
 		if api.HasCap[api.BatteryController](instance) {
 			makeResult("controllable", true, nil)
-		}
-	})
-
-	wg.Go(func() {
-		if dev, ok := api.Cap[api.VehicleOdometer](instance); ok {
-			val, err := dev.Odometer()
-			makeResult("odometer", val, err)
 		}
 	})
 
@@ -363,27 +370,6 @@ func testInstance(ctx context.Context, instance any) map[string]testResult {
 		if dev, ok := api.Cap[api.PhasePowers](instance); ok {
 			p1, p2, p3, err := dev.Powers()
 			makeResult("phasePowers", []float64{p1, p2, p3}, err)
-		}
-	})
-
-	wg.Go(func() {
-		if dev, ok := api.Cap[api.ChargeState](instance); ok {
-			val, err := dev.Status()
-			makeResult("chargeStatus", val, err)
-		}
-	})
-
-	wg.Go(func() {
-		if dev, ok := api.Cap[api.Charger](instance); ok {
-			val, err := dev.Enabled()
-			makeResult("enabled", val, err)
-		}
-	})
-
-	wg.Go(func() {
-		if dev, ok := api.Cap[api.ChargeRater](instance); ok {
-			val, err := dev.ChargedEnergy()
-			makeResult("chargedEnergy", val, err)
 		}
 	})
 
@@ -430,13 +416,6 @@ func testInstance(ctx context.Context, instance any) map[string]testResult {
 	})
 
 	wg.Go(func() {
-		if dev, ok := api.Cap[api.VehicleRange](instance); ok {
-			val, err := dev.Range()
-			makeResult("range", val, err)
-		}
-	})
-
-	wg.Go(func() {
 		if dev, ok := api.Cap[api.SocLimiter](instance); ok {
 			val, err := dev.GetLimitSoc()
 			key := "vehicleLimitSoc"
@@ -444,13 +423,6 @@ func testInstance(ctx context.Context, instance any) map[string]testResult {
 				key = "heaterTempLimit"
 			}
 			makeResult(key, val, err)
-		}
-	})
-
-	wg.Go(func() {
-		if dev, ok := api.Cap[api.Dimmer](instance); ok {
-			val, err := dev.Dimmed()
-			makeResult("dimmed", val, err)
 		}
 	})
 
