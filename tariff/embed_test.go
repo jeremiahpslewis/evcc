@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,4 +134,24 @@ func TestEmbedDecodeChargesZones(t *testing.T) {
 	assert.InDelta(t, 0.05, cc.ChargesZones_[0].Charges, 1e-9)
 	assert.Equal(t, "Jan-Mar", cc.ChargesZones_[0].Months)
 	assert.Len(t, cc.chargesZones, 2)
+}
+
+func TestEmbedUniqueFeatures(t *testing.T) {
+	tc := []struct {
+		name string
+		in   []string
+		want []api.Feature
+	}{
+		{"repeated", []string{"cacheable", "cacheable"}, []api.Feature{api.Cacheable}},
+		{"overlap", []string{"cacheable", "average", "cacheable"}, []api.Feature{api.Cacheable, api.Average}},
+		{"empty", []string{}, []api.Feature{}},
+	}
+
+	for _, tc := range tc {
+		t.Run(tc.name, func(t *testing.T) {
+			var e embed
+			require.NoError(t, util.DecodeOther(map[string]any{"features": tc.in}, &e))
+			assert.Equal(t, tc.want, e.Features())
+		})
+	}
 }

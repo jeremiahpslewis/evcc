@@ -1,7 +1,3 @@
 {{ define "heatpumpswitch" }}
-features:
-- continuous
-- heating
-- integrateddevice
-- switchdevice
+{{- include "featureset" (list "continuous" "heating" "integrateddevice" "switchdevice") }}
 {{- end }}

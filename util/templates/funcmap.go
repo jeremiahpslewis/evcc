@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"reflect"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -44,6 +46,33 @@ func quote(value string) string {
 	return fmt.Sprintf("'%s'", quoted)
 }
 
+// featureList flattens the given values into an ordered set of feature names.
+// Nested lists are expanded, non-string entries and empty names are dropped, so
+// callers can pass `and`-guarded optional features without further branching.
+func featureList(values ...any) []string {
+	res := make([]string, 0, len(values))
+
+	var add func(v any)
+	add = func(v any) {
+		if rv := reflect.ValueOf(v); rv.IsValid() && (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) {
+			for i := range rv.Len() {
+				add(rv.Index(i).Interface())
+			}
+			return
+		}
+
+		if s, ok := v.(string); ok && s != "" && !slices.Contains(res, s) {
+			res = append(res, s)
+		}
+	}
+
+	for _, v := range values {
+		add(v)
+	}
+
+	return res
+}
+
 func trimLines(s string) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
@@ -78,6 +107,7 @@ func FuncMap(tmpl *template.Template) *template.Template {
 			}
 			return res
 		},
+		"featureList":     featureList,
 		"urlEncode":       url.QueryEscape,
 		"unquote":         unquote,
 		"quote":           yamlQuote,

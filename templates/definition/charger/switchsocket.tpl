@@ -1,13 +1,8 @@
 {{ define "switchsocket" }}
 standbypower: {{ .standbypower }}
-features:
-- switchdevice
-{{- if .integrateddevice }}
-- integrateddevice
-{{- end }}
-{{- if .heating }}
-- heating
-{{- end }}
+{{- include "featureset" (list "switchdevice"
+  (and .integrateddevice "integrateddevice")
+  (and .heating "heating")) }}
 {{- if .icon }}
 icon: {{ .icon }}
 {{- end }}

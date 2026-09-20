@@ -1,11 +1,4 @@
 {{ define "features" }}
-{{- if or .basefeatures .average }}
-features:
-{{- range .basefeatures }}
-- {{ . }}
-{{- end }}
-{{- if .average }}
-- average
-{{- end }}
-{{- end }}
+{{- include "featureset" (list .basefeatures
+  (and .average "average")) }}
 {{- end }}

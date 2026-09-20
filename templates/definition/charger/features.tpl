@@ -1,11 +1,5 @@
 {{ define "features" }}
-{{- if or .heating .integrateddevice }}
-features:
-{{- if .heating }}
-- heating
-{{- end }}
-{{- if .integrateddevice }}
-- integrateddevice
-{{- end }}
-{{- end }}
+{{- include "featureset" (list .basefeatures
+  (and .heating "heating")
+  (and .integrateddevice "integrateddevice")) }}
 {{- end }}

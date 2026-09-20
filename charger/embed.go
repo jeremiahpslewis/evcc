@@ -1,6 +1,8 @@
 package charger
 
 import (
+	"slices"
+
 	"github.com/evcc-io/evcc/api"
 )
 
@@ -21,5 +23,5 @@ var _ api.FeatureDescriber = (*embed)(nil)
 
 // Features implements the api.FeatureDescriber interface
 func (v *embed) Features() []api.Feature {
-	return append(v.Features_, v.Predictor_...)
+	return api.UniqueFeatures(slices.Concat(v.Features_, v.Predictor_))
 }

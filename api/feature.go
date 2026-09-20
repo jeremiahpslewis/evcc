@@ -1,5 +1,7 @@
 package api
 
+import "slices"
+
 type Feature int
 
 //go:generate go tool enumer -type Feature -text
@@ -22,3 +24,20 @@ const (
 	AutodetectDisabled         // vehicle - do not try to identify vehicle by status
 	WakeUpDisabled             // vehicle - do not send wake-up calls
 )
+
+// UniqueFeatures returns the features as an ordered set. Repeated values are
+// dropped, the first occurrence determines the position. The input is not modified.
+func UniqueFeatures(features []Feature) []Feature {
+	if len(features) == 0 {
+		return features
+	}
+
+	res := make([]Feature, 0, len(features))
+	for _, f := range features {
+		if !slices.Contains(res, f) {
+			res = append(res, f)
+		}
+	}
+
+	return res
+}

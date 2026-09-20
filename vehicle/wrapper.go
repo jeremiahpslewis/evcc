@@ -2,6 +2,7 @@ package vehicle
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/evcc-io/evcc/api"
@@ -38,7 +39,7 @@ func NewWrapper(name, typ string, other map[string]any, err error) api.Vehicle {
 		err:    fmt.Errorf("vehicle not available: %w", err),
 	}
 
-	v.Features_ = append(v.Features_, api.Offline, api.Retryable)
+	v.Features_ = api.UniqueFeatures(slices.Concat(v.Features_, []api.Feature{api.Offline, api.Retryable}))
 	v.SetTitle(cc.Title_)
 
 	return v

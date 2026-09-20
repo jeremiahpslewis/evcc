@@ -1,8 +1,10 @@
 package util
 
 import (
+	"errors"
 	"reflect"
 
+	"github.com/evcc-io/evcc/api"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-viper/mapstructure/v2"
 )
@@ -18,6 +20,7 @@ func DecodeOther(other, cc any) error {
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			mapstructure.StringToTimeDurationHookFunc(),
 			mapstructure.TextUnmarshallerHookFunc(),
+			uniqueFeaturesHookFunc(),
 		),
 	}
 
@@ -36,6 +39,43 @@ func DecodeOther(other, cc any) error {
 	}
 
 	return nil
+}
+
+// uniqueFeaturesHookFunc normalizes every api.Feature list to an ordered set so that
+// templates, handwritten yaml and programmatic configuration behave identically.
+// Values that don't resolve to a feature are passed through for the decoder to reject.
+func uniqueFeaturesHookFunc() mapstructure.DecodeHookFuncType {
+	featuresType := reflect.TypeFor[[]api.Feature]()
+
+	return func(_, to reflect.Type, data any) (any, error) {
+		rv := reflect.ValueOf(data)
+		if to != featuresType || !rv.IsValid() || rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+			return data, nil
+		}
+
+		features := make([]api.Feature, 0, rv.Len())
+		for i := range rv.Len() {
+			f, err := toFeature(rv.Index(i).Interface())
+			if err != nil {
+				return data, nil
+			}
+			features = append(features, f)
+		}
+
+		return api.UniqueFeatures(features), nil
+	}
+}
+
+// toFeature resolves a raw configuration value to a feature
+func toFeature(v any) (api.Feature, error) {
+	switch v := v.(type) {
+	case api.Feature:
+		return v, nil
+	case string:
+		return api.FeatureString(v)
+	default:
+		return 0, errors.New("not a feature")
+	}
 }
 
 // ConfigError wraps yaml configuration errors from mapstructure
