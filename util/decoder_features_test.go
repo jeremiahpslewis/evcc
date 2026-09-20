@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/evcc-io/evcc/api"
+	"github.com/evcc-io/evcc/util/logstash"
+	jww "github.com/spf13/jwalterweatherman"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,4 +78,45 @@ func TestDecodeOtherListsUnchanged(t *testing.T) {
 
 	assert.Equal(t, []string{"abc", "abc", "def"}, cc.Identifiers, "non-feature lists keep duplicates")
 	assert.Equal(t, []api.Feature{api.Offline}, cc.Features)
+}
+
+// TestDecodeFeaturesWarnsOnDuplicates ensures repeated features are surfaced, not silently dropped
+func TestDecodeFeaturesWarnsOnDuplicates(t *testing.T) {
+	tc := []struct {
+		name string
+		in   []string
+		want string
+	}{
+		{"single duplicate", []string{"heating", "heating"}, "ignoring duplicate features: heating"},
+		{"mixed casing", []string{"heating", "Heating"}, "ignoring duplicate features: heating"},
+		{"multiple duplicates", []string{"heating", "continuous", "heating", "continuous"}, "ignoring duplicate features: heating, continuous"},
+		{"repeated more than twice", []string{"offline", "offline", "offline"}, "ignoring duplicate features: offline"},
+	}
+
+	for _, tc := range tc {
+		t.Run(tc.name, func(t *testing.T) {
+			before := len(logstash.All([]string{"config"}, jww.LevelWarn, 0))
+
+			var cc struct {
+				Features []api.Feature `mapstructure:"features"`
+			}
+			require.NoError(t, DecodeOther(map[string]any{"features": tc.in}, &cc))
+
+			logs := logstash.All([]string{"config"}, jww.LevelWarn, 0)
+			require.Len(t, logs, before+1)
+			assert.Contains(t, logs[len(logs)-1], tc.want)
+		})
+	}
+}
+
+// TestDecodeFeaturesSilentWithoutDuplicates ensures well-formed configuration stays quiet
+func TestDecodeFeaturesSilentWithoutDuplicates(t *testing.T) {
+	before := len(logstash.All([]string{"config"}, jww.LevelWarn, 0))
+
+	var cc struct {
+		Features []api.Feature `mapstructure:"features"`
+	}
+	require.NoError(t, DecodeOther(map[string]any{"features": []string{"average", "cacheable"}}, &cc))
+
+	assert.Len(t, logstash.All([]string{"config"}, jww.LevelWarn, 0), before)
 }

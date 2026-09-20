@@ -12,5 +12,5 @@ func TestLogger(t *testing.T) {
 	log := NewLogger("test")
 	log.TRACE.Print("foo")
 
-	require.Len(t, logstash.All(nil, jww.LevelTrace, 0), 1)
+	require.Len(t, logstash.All([]string{"test"}, jww.LevelTrace, 0), 1)
 }

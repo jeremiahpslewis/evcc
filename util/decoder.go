@@ -3,13 +3,19 @@ package util
 import (
 	"errors"
 	"reflect"
+	"slices"
+	"strings"
 
 	"github.com/evcc-io/evcc/api"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-viper/mapstructure/v2"
 )
 
-var validate = validator.New()
+var (
+	validate     = validator.New()
+	configLog    = NewLogger("config")
+	featuresType = reflect.TypeFor[[]api.Feature]()
+)
 
 // DecodeOther uses mapstructure to decode into target structure. Unused keys cause errors.
 func DecodeOther(other, cc any) error {
@@ -20,7 +26,7 @@ func DecodeOther(other, cc any) error {
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			mapstructure.StringToTimeDurationHookFunc(),
 			mapstructure.TextUnmarshallerHookFunc(),
-			uniqueFeaturesHookFunc(),
+			uniqueFeaturesHook,
 		),
 	}
 
@@ -41,30 +47,31 @@ func DecodeOther(other, cc any) error {
 	return nil
 }
 
-// uniqueFeaturesHookFunc normalizes every api.Feature list to an ordered set so that
+// uniqueFeaturesHook normalizes every api.Feature list to an ordered set so that
 // templates, handwritten yaml and programmatic configuration behave identically.
 // Values that don't resolve to a feature are passed through for the decoder to reject.
-func uniqueFeaturesHookFunc() mapstructure.DecodeHookFuncType {
-	featuresType := reflect.TypeFor[[]api.Feature]()
+var uniqueFeaturesHook = mapstructure.DecodeHookFuncType(func(_, to reflect.Type, data any) (any, error) {
+	rv := reflect.ValueOf(data)
+	if to != featuresType || !rv.IsValid() || rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		return data, nil
+	}
 
-	return func(_, to reflect.Type, data any) (any, error) {
-		rv := reflect.ValueOf(data)
-		if to != featuresType || !rv.IsValid() || rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+	features := make([]api.Feature, 0, rv.Len())
+	for i := range rv.Len() {
+		f, err := toFeature(rv.Index(i).Interface())
+		if err != nil {
 			return data, nil
 		}
-
-		features := make([]api.Feature, 0, rv.Len())
-		for i := range rv.Len() {
-			f, err := toFeature(rv.Index(i).Interface())
-			if err != nil {
-				return data, nil
-			}
-			features = append(features, f)
-		}
-
-		return api.UniqueFeatures(features), nil
+		features = append(features, f)
 	}
-}
+
+	unique := api.UniqueFeatures(features)
+	if len(unique) < len(features) {
+		configLog.WARN.Printf("ignoring duplicate features: %s", strings.Join(repeatedFeatures(features), ", "))
+	}
+
+	return unique, nil
+})
 
 // toFeature resolves a raw configuration value to a feature
 func toFeature(v any) (api.Feature, error) {
@@ -76,6 +83,21 @@ func toFeature(v any) (api.Feature, error) {
 	default:
 		return 0, errors.New("not a feature")
 	}
+}
+
+// repeatedFeatures returns the names of features given more than once, in first-seen order
+func repeatedFeatures(features []api.Feature) []string {
+	var res []string
+
+	seen := make(map[api.Feature]bool, len(features))
+	for _, f := range features {
+		if name := strings.ToLower(f.String()); seen[f] && !slices.Contains(res, name) {
+			res = append(res, name)
+		}
+		seen[f] = true
+	}
+
+	return res
 }
 
 // ConfigError wraps yaml configuration errors from mapstructure
