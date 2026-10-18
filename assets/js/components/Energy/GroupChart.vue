@@ -371,15 +371,17 @@ export default defineComponent({
 					position: "right",
 					min,
 					max,
-					// labels at both ends only
+					// labels and lines at both ends only
 					interval: max - min,
-					splitLine: { show: false },
+					splitLine: {
+						showMinLine: true,
+						showMaxLine: true,
+						lineStyle: { color: colors.border || "" },
+					},
 					axisLabel: {
 						color: colors.muted || "",
 						hideOverlap: true,
 						formatter: (v: number) => `${this.fmtNumber(v * factor, digits)} ${unit}`,
-						verticalAlignMinLabel: "bottom",
-						verticalAlignMaxLabel: "top",
 					},
 				}),
 			};
