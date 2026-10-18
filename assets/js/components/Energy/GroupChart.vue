@@ -39,7 +39,7 @@ import { is12hFormat } from "@/units";
 import { hasColorPicker, isBidirectional } from "./groups";
 import type { PriceBand, PriceOverlay } from "./types";
 import { CURRENCY } from "@/types/evcc";
-import { energyAxisScale, type EnergyAxisScale } from "@/utils/energyAxis";
+import { bidirectionalRange, energyAxisScale, type EnergyAxisScale } from "@/utils/energyAxis";
 import { labelStep, DAY_STEPS, MONTH_STEPS } from "@/utils/labelStep";
 import { PANEL_EXTRA, panelGrids, socTempPanel, type SubPanel } from "./subPanel";
 
@@ -104,7 +104,7 @@ export default defineComponent({
 		singleValue: Boolean,
 		// stack entities regardless of group
 		stacked: Boolean,
-		// bidirectional data with an automatic range instead of a symmetric one
+		// bidirectional data with an automatic range instead of one stepped from the larger side
 		autoRange: Boolean,
 		height: { type: Number, default: 180 },
 		// soc or temperature of the day's slots in a panel below the bars
@@ -156,7 +156,7 @@ export default defineComponent({
 		},
 		// Peak of stacked per-slot sums, incl. overlay when shown so its line isn't
 		// clipped. Bidirectional: pos/neg separately.
-		axisPeak(): number {
+		axisPeaks(): { energy: number; returnEnergy: number } {
 			const factor = this.valueFactor;
 			// Stacked groups: sum entities per slot. Unstacked (grid, meter): max per entity.
 			const peak = (series: HistorySeries[], pick: (slot: HistorySlot) => number) => {
@@ -181,20 +181,24 @@ export default defineComponent({
 				return max;
 			};
 			if (this.isBidirectional) {
-				return Math.max(
-					peak(this.visibleSeries, (slot) => Math.abs(slot.energy)),
-					peak(this.visibleSeries, (slot) => Math.abs(slot.returnEnergy))
-				);
+				return {
+					energy: peak(this.visibleSeries, (slot) => Math.abs(slot.energy)),
+					returnEnergy: peak(this.visibleSeries, (slot) => Math.abs(slot.returnEnergy)),
+				};
 			}
 			const overlay = this.showOverlay ? this.overlay : [];
-			return Math.max(
-				peak(this.visibleSeries, (slot) => slot.energy),
-				peak(overlay, (slot) => slot.energy)
-			);
+			return {
+				energy: Math.max(
+					peak(this.visibleSeries, (slot) => slot.energy),
+					peak(overlay, (slot) => slot.energy)
+				),
+				returnEnergy: 0,
+			};
 		},
-		// axisPeak is in kW(h), the shared scale works in W(h)
+		// axisPeaks are in kW(h), the shared scale works in W(h)
 		axisScale(): EnergyAxisScale {
-			return energyAxisScale(this.axisPeak * 1000);
+			const { energy, returnEnergy } = this.axisPeaks;
+			return energyAxisScale(Math.max(energy, returnEnergy) * 1000);
 		},
 		useSmallUnit(): boolean {
 			return this.axisScale.unit === POWER_UNIT.W;
@@ -920,11 +924,11 @@ export default defineComponent({
 						// automatic range must be allowed below zero for the export band
 						...(this.autoRange && this.isBidirectional ? { min: undefined } : {}),
 						...(this.isBidirectional && this.axisLimit > 0 && !this.autoRange
-							? {
-									min: -this.axisLimit,
-									max: this.axisLimit,
-									interval: this.axisLimit / 2,
-								}
+							? bidirectionalRange(
+									this.axisPeaks.energy,
+									this.axisPeaks.returnEnergy,
+									this.axisLimit
+								)
 							: this.useSmallUnit
 								? { max: this.axisLimit, interval: this.axisLimit / 4 }
 								: {}),

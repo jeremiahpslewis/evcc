@@ -160,7 +160,8 @@ INSERT INTO `meters` VALUES (10, 1775645100, 0, 0.2);
 
 -- =====================================================================
 -- Month-aggregation case: 2026-06, three days with battery bidirectional
--- data. Daily totals ~1.4 / 1.0 kWh → limit rounds to 2 → 1-decimal kWh.
+-- data. Daily totals ~1.4 / 1.0 kWh → limit rounds to 2 → 1-decimal kWh,
+-- the discharge side ends at -1.
 -- =====================================================================
 INSERT INTO `meters` VALUES (3, 1781517600, 1.4, 1.0);
 INSERT INTO `meters` VALUES (3, 1781604000, 1.4, 1.0);
@@ -196,7 +197,7 @@ INSERT INTO `meters` VALUES (12, 1775903400, 0.5, 0.1);
 INSERT INTO `meters` VALUES (12, 1775904300, 0.5, 0.1);
 
 -- 2026-04-10 → additional meter with export. Import peak 2 kW, export 0.4 kW.
--- Negative values must flip the axis to symmetric (bidirectional) ±2 kW.
+-- Negative values extend the axis below zero by one step to -1 kW.
 INSERT INTO `meters` VALUES (11, 1775815200, 0.5, 0.1);
 INSERT INTO `meters` VALUES (11, 1775816100, 0.5, 0.1);
 INSERT INTO `meters` VALUES (11, 1775817000, 0.5, 0.1);

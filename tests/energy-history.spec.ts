@@ -137,14 +137,8 @@ test.describe("axis and units", () => {
 
   test("month view uses kWh unit", async ({ page }) => {
     await gotoMonth(page, 2026, 6);
-    expect(await yAxis(chart(page, "battery"))).toEqual([
-      "kWh",
-      "-2.0",
-      "-1.0",
-      "0.0",
-      "1.0",
-      "2.0",
-    ]);
+    // 1.0 kWh discharge ends one step below zero instead of mirroring the 1.4 kWh charge
+    expect(await yAxis(chart(page, "battery"))).toEqual(["kWh", "-1.0", "0.0", "1.0", "2.0"]);
   });
 });
 
@@ -287,10 +281,13 @@ test.describe("additional meters", () => {
     await expect(additional.getByText("Others", { exact: true })).toBeHidden();
   });
 
-  // 2026-04-10: same meter with export. Negatives flip the axis to symmetric.
+  // 2026-04-10: "Feed-in meter" only exports 1.2 kW, "Submeter" imports 2 kW and
+  // exports 0.4 kW. Each side of the axis reaches only as far as its own data.
   test("bidirectional axis when data contains exports", async ({ page }) => {
     await gotoDay(page, 2026, 4, 10);
-    expect(await yAxis(chart(page, "meter"))).toEqual(["kW", "-2.0", "-1.0", "0.0", "1.0", "2.0"]);
+    const charts = card(page, "meter").getByTestId("group-chart-meter");
+    expect(await yAxis(charts.nth(0))).toEqual(["kW", "-2.0", "-1.0", "0.0"]);
+    expect(await yAxis(charts.nth(1))).toEqual(["kW", "-1.0", "0.0", "1.0", "2.0"]);
   });
 
   // 2026-04-10: "Submeter" 2.0/0.4 kWh, both directions as stats.

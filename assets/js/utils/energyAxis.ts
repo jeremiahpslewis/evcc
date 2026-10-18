@@ -38,3 +38,27 @@ export function energyAxisScale(peak: number): EnergyAxisScale {
   const { small, digits, limit } = axisScale(peak);
   return { unit: small ? POWER_UNIT.W : POWER_UNIT.KW, digits, limit };
 }
+
+export interface AxisRange {
+  min: number;
+  max: number;
+  interval: number;
+}
+
+// Range for values above and below zero. Both sides step by half the limit of
+// the larger side and end on the first step past their own peak, so a small
+// export doesn't mirror the import range.
+export function bidirectionalRange(upper: number, lower: number, limit: number): AxisRange {
+  const interval = limit / 2;
+  // tolerance keeps float noise on a step from adding another one
+  const steps = (peak: number) => Math.max(0, Math.ceil(peak / interval - 1e-6));
+  const up = steps(upper);
+  const down = steps(lower);
+  return {
+    // an empty chart keeps its context above the baseline
+    max: (up || down ? up : 2) * interval,
+    // no -0, it would label the baseline "-0"
+    min: down ? -down * interval : 0,
+    interval,
+  };
+}

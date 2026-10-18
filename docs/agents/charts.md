@@ -17,7 +17,7 @@ Presentation:
 
 - Tick labels are plain numbers without a unit suffix.
 - The unit appears once as a small label above the axis ("W", "kW", "Wh", "kWh") where the layout has headroom. Forecast charts omit the label and rely on the tooltip for units.
-- Bidirectional charts (charge and discharge, import and export) keep their automatic range and adopt only unit and decimals.
+- Bidirectional charts (charge and discharge, import and export) step both sides by half the limit of the larger side. Each side ends on the first step past its own peak, so a small export does not mirror the import range. The overview chart keeps the automatic range and adopts only unit and decimals.
 
 ## Tooltips
 
