@@ -41,7 +41,7 @@ import type { PriceBand, PriceOverlay } from "./types";
 import { CURRENCY } from "@/types/evcc";
 import { bidirectionalRange, energyAxisScale, type EnergyAxisScale } from "@/utils/energyAxis";
 import { labelStep, DAY_STEPS, MONTH_STEPS } from "@/utils/labelStep";
-import { PANEL_EXTRA, panelGrids, socTempPanel, type SubPanel } from "./subPanel";
+import { PANEL_EXTRA, panelGrids, priceRange, socTempPanel, type SubPanel } from "./subPanel";
 
 export interface HistorySlot {
 	start: string;
@@ -333,8 +333,14 @@ export default defineComponent({
 			add("import", this.prices?.import, colors.price || "");
 			add("feedin", this.prices?.feedin, colors.export || "");
 			if (!bands.length) return null;
-			const min = Math.min(...bands.map(({ band }) => lo(band)));
-			const max = Math.max(...bands.map(({ band }) => hi(band)));
+			const { min, max, step } = priceRange(
+				Math.min(...bands.map(({ band }) => lo(band))),
+				Math.max(...bands.map(({ band }) => hi(band)))
+			);
+			const factor = this.pricePerKWhDisplayFactor(this.currency);
+			// as many decimals as the step needs in the displayed unit
+			const digits = Math.max(0, -Math.floor(Math.log10(step * factor) + 1e-9));
+			const unit = this.pricePerKWhUnit(this.currency, true);
 			const series = ({ key, band, color }: (typeof bands)[number]) => ({
 				id: `price-${key}`,
 				name: `price-${key}`,
@@ -360,7 +366,6 @@ export default defineComponent({
 			return {
 				track: "transparent",
 				series: bands.map(series),
-				// the exact price range, currencies differ too much for rounding rules
 				yAxis: forecastYAxis({
 					gridIndex: 1,
 					position: "right",
@@ -372,7 +377,9 @@ export default defineComponent({
 					axisLabel: {
 						color: colors.muted || "",
 						hideOverlap: true,
-						formatter: (v: number) => this.fmtPricePerKWh(v, this.currency, true),
+						formatter: (v: number) => `${this.fmtNumber(v * factor, digits)} ${unit}`,
+						verticalAlignMinLabel: "bottom",
+						verticalAlignMaxLabel: "top",
 					},
 				}),
 			};

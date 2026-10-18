@@ -19,6 +19,10 @@ Presentation:
 - The unit appears once as a small label above the axis ("W", "kW", "Wh", "kWh") where the layout has headroom. Forecast charts omit the label and rely on the tooltip for units.
 - Bidirectional charts (charge and discharge, import and export) step both sides by half the limit of the larger side. Each side ends on the first step past its own peak, so a small export does not mirror the import range. The overview chart keeps the automatic range and adopts only unit and decimals.
 
+## Price panel
+
+A skinny panel below the grid bars shows the import and feed-in price when it moves over the period. Its range widens to whole steps of 1, 2 or 5 times a power of ten, about a quarter of the spread each, so both ends read as round numbers in any currency. Only the two ends carry a label, inside the panel, with as many decimals as the step needs.
+
 ## Tooltips
 
 - One shared look for all charts: a heading with the time or category, rows with name and value, no color swatches.
