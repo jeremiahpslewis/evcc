@@ -21,7 +21,7 @@ Presentation:
 
 ## Price panel
 
-A skinny panel below the grid bars shows the import and feed-in price when it moves over the period. Its range widens to whole steps of 1, 2 or 5 times a power of ten, about a quarter of the spread each, so both ends read as round numbers in any currency. Only the two ends carry a grid line and a label, with as many decimals as the step needs.
+A skinny panel below the grid bars shows the import and feed-in price when it moves over the period. Its range widens to whole steps of 1, 2 or 5 times a power of ten, each at least a sixth of the spread, so both ends read as round numbers in any currency. The step with the tightest range wins. Zero, when in range, gets the same baseline as the bars above. Only the two ends carry a grid line and a label, with as many decimals as the step needs.
 
 ## Tooltips
 

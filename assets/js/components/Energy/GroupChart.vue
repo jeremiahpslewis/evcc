@@ -365,6 +365,7 @@ export default defineComponent({
 			});
 			return {
 				track: "transparent",
+				zeroLine: min <= 0 && max >= 0,
 				series: bands.map(series),
 				yAxis: forecastYAxis({
 					gridIndex: 1,
@@ -713,16 +714,15 @@ export default defineComponent({
 				interval: 0,
 				formatter: (_value: string, index: number) => formatLabel(cats[index] ?? 0),
 			};
+			const zeroLine = {
+				show: true,
+				onZero: true,
+				lineStyle: { color: colors.muted || "", width: 1 },
+			};
 			const barXAxis = {
 				type: "category",
 				data: keys,
-				axisLine: this.isBidirectional
-					? {
-							show: true,
-							onZero: true,
-							lineStyle: { color: colors.muted || "", width: 1 },
-						}
-					: { show: false },
+				axisLine: this.isBidirectional ? zeroLine : { show: false },
 				axisTick: { show: false },
 				splitLine: { show: false },
 				// with a panel the labels sit below it
@@ -921,7 +921,7 @@ export default defineComponent({
 							{
 								...barXAxis,
 								gridIndex: 1,
-								axisLine: { show: false },
+								axisLine: this.subPanel.zeroLine ? zeroLine : { show: false },
 								axisLabel: xAxisLabel,
 							},
 						]

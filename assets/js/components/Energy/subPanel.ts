@@ -10,24 +10,27 @@ export interface SubPanel {
   series: Record<string, unknown>[];
   yAxis: Record<string, unknown>;
   track: string; // background of the panel, the full range
+  zeroLine?: boolean; // zero lies in the range, marked like the main plot's baseline
 }
 
-// Price range widened to whole steps of 1, 2 or 5 × 10^n, about a quarter of the
-// span each, so both ends read as round numbers in any currency
+// Price range on whole steps of 1, 2 or 5 × 10^n, each at least a sixth of the
+// span, so both ends read as round numbers in any currency. The tightest range
+// wins, the larger step on a tie for fewer decimals
 export function priceRange(lo: number, hi: number): { min: number; max: number; step: number } {
-  const rough = (hi - lo) / 4;
-  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
-  // a span like 0.32 - 0.3 carries float noise that would skip a step size
-  const r = Number((rough / mag).toPrecision(12));
-  const step = (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * mag;
-  // tolerance keeps float noise on a step from adding another one, precision drops
-  // the noise of the multiplication
-  const at = (n: number) => Number((n * step).toPrecision(12));
-  return {
-    min: at(Math.floor(lo / step + 1e-6)),
-    max: at(Math.ceil(hi / step - 1e-6)),
-    step: Number(step.toPrecision(12)),
-  };
+  const least = (hi - lo) / 6;
+  const mag = Math.pow(10, Math.floor(Math.log10(least)));
+  // precision drops the float noise of the multiplications
+  const clean = (v: number) => Number(v.toPrecision(12));
+  let best: { min: number; max: number; step: number } | null = null;
+  for (const m of [1, 2, 5, 10, 20, 50]) {
+    const step = clean(m * mag);
+    if (step < least * (1 - 1e-9)) continue;
+    // tolerance keeps float noise on a step from adding another one
+    const min = clean(Math.floor(lo / step + 1e-6) * step);
+    const max = clean(Math.ceil(hi / step - 1e-6) * step);
+    if (!best || clean(max - min) <= clean(best.max - best.min)) best = { min, max, step };
+  }
+  return best!;
 }
 
 // soc or temperature per category as line and area on grid, x and y axis 1
