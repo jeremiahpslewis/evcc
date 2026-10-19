@@ -13,6 +13,7 @@ const (
 	TariffTypeCo2
 	TariffTypeSolar
 	TariffTypeTemperature // outdoor temperature forecast in °C
+	TariffTypeLoad        // household load forecast, mean power in W
 )
 
 type TariffUsage int
@@ -25,4 +26,5 @@ const (
 	TariffUsagePlanner
 	TariffUsageSolar
 	TariffUsageTemperature // outdoor temperature forecast
+	TariffUsageLoad        // household load forecast
 )

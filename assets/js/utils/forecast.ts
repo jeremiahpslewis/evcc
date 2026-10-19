@@ -32,7 +32,7 @@ function expandSolar(solar?: SolarDetails): UiSolarDetails | undefined {
 // [ts, val] with timestamps in unix seconds. Expand them to objects with unix
 // milliseconds so components can keep using named fields and `new Date(...)`.
 export function expandForecast(forecast?: Forecast): UiForecast {
-  const { grid, co2, solar, planner, feedin, temperature } = forecast ?? {};
+  const { grid, co2, solar, planner, feedin, temperature, load } = forecast ?? {};
   return {
     grid: expandSlots(grid),
     co2: expandSlots(co2),
@@ -40,6 +40,7 @@ export function expandForecast(forecast?: Forecast): UiForecast {
     planner: expandSlots(planner),
     feedin: expandSlots(feedin),
     temperature: expandSlots(temperature),
+    load: expandSlots(load),
   };
 }
 

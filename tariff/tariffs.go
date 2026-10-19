@@ -8,8 +8,8 @@ import (
 )
 
 type Tariffs struct {
-	Currency                                       currency.Unit
-	Grid, FeedIn, Co2, Planner, Solar, Temperature api.Tariff
+	Currency                                             currency.Unit
+	Grid, FeedIn, Co2, Planner, Solar, Temperature, Load api.Tariff
 }
 
 // At returns the rate at the given time
@@ -111,6 +111,9 @@ func (t *Tariffs) Get(u api.TariffUsage) api.Tariff {
 
 	case api.TariffUsageTemperature:
 		return t.Temperature
+
+	case api.TariffUsageLoad:
+		return t.Load
 
 	default:
 		return nil

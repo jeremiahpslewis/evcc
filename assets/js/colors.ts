@@ -25,6 +25,7 @@ const colors: {
   price: string | null;
   co2: string | null;
   temperature: string | null;
+  load: string | null;
   export: string | null;
   forecast: string | null;
   background: string | null;
@@ -45,6 +46,7 @@ const colors: {
   price: null,
   co2: null,
   temperature: null,
+  load: null,
   export: null,
   forecast: null,
   background: null,
@@ -171,6 +173,7 @@ export function updateCssColors() {
   colors.price = get("--evcc-price");
   colors.co2 = get("--evcc-co2");
   colors.temperature = get("--evcc-temperature");
+  colors.load = get("--evcc-load");
   colors.export = get("--evcc-export");
   colors.forecast = get("--evcc-dark-yellow");
   colors.background = get("--evcc-background");

@@ -94,6 +94,35 @@ func TestApplyTemperatureCorrection(t *testing.T) {
 	assert.InDelta(t, 0.8, resultBinned[8], 1e-6, "binned exact match for warm temp (>=18°C) should be used directly")
 }
 
+func TestApplyLoadForecast(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	start := time.Now().Truncate(tariff.SlotDuration)
+	hour := func(i int, w float64) api.Rate {
+		return api.Rate{Start: start.Add(time.Duration(i) * time.Hour), End: start.Add(time.Duration(i+1) * time.Hour), Value: w}
+	}
+
+	// past hour ignored, 800W for the next hour, a negative value clamped, nothing beyond
+	mockTariff := api.NewMockTariff(ctrl)
+	mockTariff.EXPECT().Rates().Return(api.Rates{hour(-1, 5000), hour(0, 800), hour(1, -50)}, nil).AnyTimes()
+
+	site := &Site{
+		log:     util.NewLogger("test"),
+		tariffs: &tariff.Tariffs{Load: mockTariff},
+	}
+
+	gt := slices.Repeat([]float64{100}, 12)
+	covered := site.applyLoadForecast(gt)
+	assert.Equal(t, []float64{200, 200, 200, 200, 0, 0, 0, 0, 100, 100, 100, 100}, gt, "W per hour to Wh per quarter, profile beyond the forecast")
+	assert.Equal(t, append(slices.Repeat([]bool{true}, 8), false, false, false, false), covered)
+
+	// without load forecast the profile stays
+	site.tariffs = &tariff.Tariffs{}
+	gt = slices.Repeat([]float64{100}, 4)
+	assert.Nil(t, site.applyLoadForecast(gt))
+	assert.Equal(t, slices.Repeat([]float64{100}, 4), gt)
+}
+
 func TestLookupBin(t *testing.T) {
 	bins := map[int]float64{
 		5:  3.0,

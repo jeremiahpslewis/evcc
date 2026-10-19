@@ -19,7 +19,7 @@
 
 <script lang="ts">
 import { defineComponent, type PropType } from "vue";
-import formatter from "@/mixins/formatter";
+import formatter, { POWER_UNIT } from "@/mixins/formatter";
 import type { UiForecastSlot } from "@/types/evcc";
 import type { ValueChartType } from "./ValueChart.vue";
 
@@ -55,11 +55,15 @@ export default defineComponent({
 			if (this.type === "co2") {
 				return `${this.fmtNumber(min, 0)} – ${this.fmtCo2Medium(max)}`;
 			}
+			if (this.type === "load") {
+				return `${this.fmtW(min, POWER_UNIT.KW, false, 1)} – ${this.fmtValue(max)}`;
+			}
 			return `${this.fmtValue(min)} – ${this.fmtValue(max)}`;
 		},
 	},
 	methods: {
 		fmtValue(value: number): string {
+			if (this.type === "load") return this.fmtW(value, POWER_UNIT.KW, true, 1);
 			return this.type === "co2" ? this.fmtCo2Medium(value) : this.fmtTemperature(value);
 		},
 	},
