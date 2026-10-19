@@ -26,6 +26,7 @@ import "@h2d2/shopicons/es/regular/eco1";
 import "@h2d2/shopicons/es/regular/clock";
 import "@h2d2/shopicons/es/regular/sun";
 import "@h2d2/shopicons/es/regular/thermometerhalf";
+import "@h2d2/shopicons/es/regular/home";
 import { type PropType } from "vue";
 import type { TariffType, CURRENCY } from "@/types/evcc";
 import DeviceCard from "./DeviceCard.vue";
@@ -74,6 +75,7 @@ export default {
 				planner: "shopicon-regular-clock",
 				solar: "shopicon-regular-sun",
 				temperature: "shopicon-regular-thermometerhalf",
+				load: "shopicon-regular-home",
 			};
 			return iconMap[this.tariffType];
 		},

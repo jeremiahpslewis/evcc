@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _TariffTypeName = "pricestaticpricedynamicpriceforecastco2solartemperature"
+const _TariffTypeName = "pricestaticpricedynamicpriceforecastco2solartemperatureload"
 
-var _TariffTypeIndex = [...]uint8{0, 11, 23, 36, 39, 44, 55}
+var _TariffTypeIndex = [...]uint8{0, 11, 23, 36, 39, 44, 55, 59}
 
-const _TariffTypeLowerName = "pricestaticpricedynamicpriceforecastco2solartemperature"
+const _TariffTypeLowerName = "pricestaticpricedynamicpriceforecastco2solartemperatureload"
 
 func (i TariffType) String() string {
 	i -= 1
@@ -31,9 +31,10 @@ func _TariffTypeNoOp() {
 	_ = x[TariffTypeCo2-(4)]
 	_ = x[TariffTypeSolar-(5)]
 	_ = x[TariffTypeTemperature-(6)]
+	_ = x[TariffTypeLoad-(7)]
 }
 
-var _TariffTypeValues = []TariffType{TariffTypePriceStatic, TariffTypePriceDynamic, TariffTypePriceForecast, TariffTypeCo2, TariffTypeSolar, TariffTypeTemperature}
+var _TariffTypeValues = []TariffType{TariffTypePriceStatic, TariffTypePriceDynamic, TariffTypePriceForecast, TariffTypeCo2, TariffTypeSolar, TariffTypeTemperature, TariffTypeLoad}
 
 var _TariffTypeNameToValueMap = map[string]TariffType{
 	_TariffTypeName[0:11]:  TariffTypePriceStatic,
@@ -42,6 +43,7 @@ var _TariffTypeNameToValueMap = map[string]TariffType{
 	_TariffTypeName[36:39]: TariffTypeCo2,
 	_TariffTypeName[39:44]: TariffTypeSolar,
 	_TariffTypeName[44:55]: TariffTypeTemperature,
+	_TariffTypeName[55:59]: TariffTypeLoad,
 }
 
 var _TariffTypeLowerNameToValueMap = map[string]TariffType{
@@ -51,6 +53,7 @@ var _TariffTypeLowerNameToValueMap = map[string]TariffType{
 	_TariffTypeLowerName[36:39]: TariffTypeCo2,
 	_TariffTypeLowerName[39:44]: TariffTypeSolar,
 	_TariffTypeLowerName[44:55]: TariffTypeTemperature,
+	_TariffTypeLowerName[55:59]: TariffTypeLoad,
 }
 
 var _TariffTypeNames = []string{
@@ -60,6 +63,7 @@ var _TariffTypeNames = []string{
 	_TariffTypeName[36:39],
 	_TariffTypeName[39:44],
 	_TariffTypeName[44:55],
+	_TariffTypeName[55:59],
 }
 
 // TariffTypeString retrieves an enum value from the enum constants string name.

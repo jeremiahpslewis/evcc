@@ -22,6 +22,19 @@ export const home: DemandDetail = {
     (h) => 0.4 + 0.3 * Math.exp(-(((h - 12.5) / 1) ** 2)) + 0.6 * Math.exp(-(((h - 19) / 1.5) ** 2))
   ),
 };
+// consumption forecast from an external source: the base load plus a planned evening
+// heat pump run the learned profile only knows as an average
+export const homeForecast: DemandDetail = {
+  type: "home",
+  values: home.values.map((v, i) => {
+    const h = hours[i] ?? 0;
+    return v + (h >= 18 && h < 19.5 ? 2.4 * SLOT_H * 1000 : 0);
+  }),
+};
+// learned profile the forecast replaces, sent as details.homeProfile
+export const homeProfile = home.values;
+// the forecast reaches until 20:00, the profile covers the rest
+export const loadForecast = hours.map((h) => h < 20);
 // heat pump tapering off after the morning
 export const heatPump: DemandDetail = {
   type: "heating",

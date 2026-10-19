@@ -10,15 +10,17 @@ import (
 
 const (
 	// groups
-	Forecast    = "forecast"
-	Temperature = "temperature"
-	Battery     = "battery"
-	Grid        = "grid"
-	PV          = "pv"
-	Home        = "home" // meter and group (virtual measurement)
-	Loadpoint   = "loadpoint"
-	Meter       = "meter"    // additional meter (ext, monitoring only)
-	Consumer    = "consumer" // consumer meter (consumers list or aux)
+	Forecast     = "forecast"     // solar forecast
+	HomeForecast = "homeforecast" // consumption forecast
+	HomeProfile  = "homeprofile"  // default consumption profile the forecast replaces
+	Temperature  = "temperature"
+	Battery      = "battery"
+	Grid         = "grid"
+	PV           = "pv"
+	Home         = "home" // meter and group (virtual measurement)
+	Loadpoint    = "loadpoint"
+	Meter        = "meter"    // additional meter (ext, monitoring only)
+	Consumer     = "consumer" // consumer meter (consumers list or aux)
 )
 
 type Collector struct {

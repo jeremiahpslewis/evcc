@@ -41,6 +41,9 @@ import {
 
 const GRID_LABEL = "Grid Power";
 const SOLAR_LABEL = "Solar Forecast";
+// base load from the consumption forecast, and the default profile it replaces where it reaches
+const FORECAST_LABEL = "Consumption (forecast)";
+const DEFAULT_LABEL = "Consumption (default)";
 
 // one stacked bar series, data in kW
 interface StackEntry {
@@ -71,6 +74,16 @@ export default defineComponent({
 			type: Array as PropType<string[]>,
 			default: () => [],
 		},
+		// learned consumption profile, set while a consumption forecast replaces it
+		homeProfile: {
+			type: Array as PropType<number[]>,
+			default: () => [],
+		},
+		// request slots taken from the consumption forecast
+		loadForecast: {
+			type: Array as PropType<boolean[]>,
+			default: () => [],
+		},
 		timestamp: {
 			type: String,
 			default: "",
@@ -88,6 +101,19 @@ export default defineComponent({
 		consumptionColor(): string {
 			return colors.muted || "";
 		},
+		profileColor(): string {
+			return colors.muted || "";
+		},
+		// chart slots taken from the consumption forecast
+		forecastSlots(): boolean[] {
+			return this.parents.map((p) => !!this.loadForecast[p]);
+		},
+		hasForecast(): boolean {
+			return this.homeProfile.length > 0 && this.forecastSlots.some(Boolean);
+		},
+		splitLabels(): string[] {
+			return this.hasForecast ? [FORECAST_LABEL, DEFAULT_LABEL] : [];
+		},
 		// stack order from the zero line: fixed loads first (consumption, unmodelled, heating),
 		// flexible ones outer (charging loadpoints, home batteries)
 		stackEntries(): StackEntry[] {
@@ -96,12 +122,7 @@ export default defineComponent({
 				? this.demandDetails
 				: [{ type: "home", values: this.evopt.req.time_series.gt }];
 			return [
-				...details.map((d, i) => ({
-					label: demandTitle(d, this.consumptionLabel),
-					color: this.demandColors[i] || this.consumptionColor,
-					data: this.split(d.values).map(this.toKW),
-					id: d.title ? loadpointTitle(d) : undefined,
-				})),
+				...details.flatMap((d, i) => this.demandEntries(d, i)),
 				...this.batteryEntries("vehicle"),
 				...this.batteryEntries("battery"),
 			];
@@ -152,12 +173,31 @@ export default defineComponent({
 				...transientHoverDot(colors.forecast || ""),
 				lineStyle: { color: colors.forecast || "", ...lineDefaults },
 			};
+			// the default the forecast replaced, only where it did: greyed out over the bars,
+			// sticking out where it expected more, the forecast showing above where less
+			const profile = this.hasForecast
+				? [
+						{
+							name: DEFAULT_LABEL,
+							type: "line",
+							z: 3,
+							data: this.split(this.homeProfile).map((wh, i) =>
+								this.forecastSlots[i] ? this.toKW(wh, i) : null
+							),
+							step: "middle",
+							symbol: "none",
+							lineStyle: { color: this.profileColor, width: 1.5 },
+							areaStyle: { color: this.profileColor, opacity: 0.35 },
+						},
+					]
+				: [];
 			const series: Record<string, unknown>[] = [
 				dayBoundarySeries(this.times),
 				lineCasing(grid, 3),
 				grid,
 				lineCasing(solar, 3),
 				solar,
+				...profile,
 				...this.stackEntries.map((e) => ({
 					name: e.label,
 					type: "bar",
@@ -206,9 +246,23 @@ export default defineComponent({
 			};
 		},
 		legends(): Legend[] {
+			// the dashed default continues the default bars, it needs an entry of its own only
+			// when the forecast covers the whole horizon
+			const defaultLine =
+				this.hasForecast && !this.stackEntries.some((e) => e.label === DEFAULT_LABEL);
 			const legends: Legend[] = [
 				{ label: GRID_LABEL, color: colors.grid || "", value: "", type: "line" },
 				{ label: SOLAR_LABEL, color: colors.forecast || "", value: "", type: "line" },
+				...(defaultLine
+					? [
+							{
+								label: DEFAULT_LABEL,
+								color: this.profileColor,
+								value: "",
+								type: "line" as const,
+							},
+						]
+					: []),
 				...this.stackEntries.map((e) => ({
 					label: e.label,
 					color: e.color,
@@ -229,6 +283,32 @@ export default defineComponent({
 		},
 		formatValue(value: number): string {
 			return this.fmtW(value * 1000, POWER_UNIT.AUTO);
+		},
+		// the base load splits into the slots taken from the consumption forecast and the
+		// ones the profile still provides
+		demandEntries(detail: DemandDetail, index: number): StackEntry[] {
+			const data = this.split(detail.values).map(this.toKW);
+			const entry: StackEntry = {
+				label: demandTitle(detail, this.consumptionLabel),
+				color: this.demandColors[index] || this.consumptionColor,
+				data,
+				id: detail.title ? loadpointTitle(detail) : undefined,
+			};
+			if (detail.type !== "home" || !this.hasForecast) return [entry];
+
+			const forecast = this.forecastSlots;
+			return [
+				{
+					label: FORECAST_LABEL,
+					color: colors.load || "",
+					data: data.map((kw, i) => (forecast[i] ? kw : 0)),
+				},
+				{
+					...entry,
+					label: DEFAULT_LABEL,
+					data: data.map((kw, i) => (forecast[i] ? 0 : kw)),
+				},
+			].filter((e) => e.data.some((kw) => kw !== 0));
 		},
 		batteryEntries(type: BatteryDetail["type"]): StackEntry[] {
 			return this.batteryDetails.flatMap((detail, index) => {
@@ -260,6 +340,8 @@ export default defineComponent({
 			const rows: TooltipRow[] = arr
 				.filter((p) => p.value != null && !Number.isNaN(p.value))
 				.filter((p) => !p.seriesName?.endsWith("-casing"))
+				// each slot is either forecast or default, skip the empty half of the pair
+				.filter((p) => !(p.value === 0 && this.splitLabels.includes(p.seriesName || "")))
 				.map((p) => {
 					const value = p.value as number;
 					if (p.seriesName === GRID_LABEL) {

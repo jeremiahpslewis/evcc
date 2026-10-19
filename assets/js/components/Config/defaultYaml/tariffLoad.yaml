@@ -1,0 +1,27 @@
+## House consumption forecast
+tariff: load
+forecast: # consumption without charging and heating controlled by evcc, mean power (W)
+  source: js
+  script: |
+    var rates = [];
+    var now = new Date();
+    for (var i = 0; i < 48; i++) {
+      var start = new Date(now.getTime() + i * 3600000);
+      rates.push({
+        start: start.toISOString(),
+        end: new Date(start.getTime() + 3600000).toISOString(),
+        value: 800 // W
+      });
+    }
+    JSON.stringify(rates);
+
+## Home Assistant example (uncomment to use)
+## reads a list attribute like [{"start": "...", "end": "...", "power": 850}, ...]
+
+#interval: 15m
+#forecast:
+#  source: homeassistant
+#  uri: http://homeassistant.local:8123
+#  entity: sensor.house_consumption_forecast
+#  attribute: forecast
+#  jq: map({ start, end, value: .power }) | tostring

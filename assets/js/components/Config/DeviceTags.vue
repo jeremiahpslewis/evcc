@@ -76,7 +76,7 @@ const HIDDEN_TAGS = ["icon", "heating", "integratedDevice", "continuous"];
 
 const PHASE_TAGS = ["phaseCurrents", "phaseVoltages", "phasePowers"];
 
-const FORECAST_TAGS = ["priceRates", "co2Rates", "solarRates", "temperatureRates"];
+const FORECAST_TAGS = ["priceRates", "co2Rates", "solarRates", "temperatureRates", "loadRates"];
 
 // display order, remaining tags follow in backend order
 const FIRST_TAGS = ["power", "soc", "capacity", "energy", "returnEnergy"];
@@ -135,6 +135,7 @@ export default {
 				co2Rates: "co2",
 				solarRates: "solar",
 				temperatureRates: "temperature",
+				loadRates: "load",
 			};
 
 			// Find which forecast tag is present
@@ -321,6 +322,7 @@ export default {
 				case "co2":
 					return short ? this.fmtCo2Short(value) : this.fmtCo2Medium(value);
 				case "solar":
+				case "load":
 					return this.fmtW(value);
 				case "temperature":
 					return this.fmtTemperature(value);

@@ -1086,10 +1086,16 @@
         "titleEdit": "Netzbezugstarif bearbeiten"
       },
       "legacyWarning": "Neue Tarifkonfiguration verfügbar! Entferne die Konfiguration hier und speichere, um den neuen geführten Prozess zu nutzen.",
+      "load": {
+        "description": "Vorhersage des Hausverbrauchs ohne von evcc gesteuertes Laden und Heizen, z. B. aus Home Assistant. Ersetzt im Optimierer das gelernte Verbrauchsprofil.",
+        "titleAdd": "Verbrauchsvorhersage hinzufügen",
+        "titleEdit": "Verbrauchsvorhersage bearbeiten"
+      },
       "option": {
         "co2": "CO₂-Vorhersage hinzufügen",
         "feedIn": "Einspeisevergütung hinzufügen",
         "grid": "Netzbezugstarif hinzufügen",
+        "load": "Verbrauchsvorhersage hinzufügen",
         "planner": "Planer-Vorhersage hinzufügen",
         "solar": "PV-Vorhersage hinzufügen",
         "temperature": "Temperatur-Vorhersage hinzufügen"
@@ -1118,6 +1124,7 @@
         "co2": "CO₂ Vorhersage",
         "feedIn": "Einspeisetarif",
         "grid": "Netzbezugspreis",
+        "load": "Verbrauchsvorhersage",
         "planner": "Planer",
         "solar": "PV",
         "temperature": "Temperaturvorhersage"
@@ -1183,6 +1190,13 @@
         "river": "River",
         "treemap": "Treemap"
       }
+    },
+    "consumption": {
+      "accuracy": "Vorhersagegenauigkeit",
+      "consumed": "Verbraucht",
+      "default": "Standard",
+      "defaultAccuracy": "Genauigkeit Standard",
+      "title": "Verbrauchsvorhersage"
     },
     "direction": {
       "battery": {
@@ -1377,12 +1391,17 @@
     },
     "empty": {
       "co2": "Erfahre, wann Netzstrom in deiner Region sauber ist. Ladepläne werden auf niedrige Emissionen optimiert und CO₂-Einsparungen berechnet.",
+      "load": "Vorhersage deines Hausverbrauchs aus einer externen Quelle, z. B. Home Assistant. Ersetzt im Optimierer das gelernte Verbrauchsprofil.",
       "price": "Dynamischen Tarif konfigurieren, um Ladepläne automatisch zu optimieren und Einsparungen zu berechnen.",
       "setup": "Tarife und Vorhersagen einrichten",
       "solar": "Erwartete PV-Erzeugung für heute und die nächsten Tage. Wird in Zukunft auch für die automatische Ladeoptimierung verwendet.",
       "temperature": "Zeigt die erwartete Außentemperatur am Standort. Wird für die Vorhersage des Heizbedarfs verwendet."
     },
     "hideLine": "Linie ausblenden",
+    "load": {
+      "average": "Durchschnitt",
+      "range": "Bereich"
+    },
     "modalTitle": "Vorhersage",
     "price": {
       "average": "Durchschnitt",
@@ -1408,6 +1427,7 @@
     },
     "type": {
       "co2": "CO₂-Emissionen",
+      "load": "Verbrauch",
       "price": "Netzpreis",
       "solar": "PV-Erzeugung",
       "temperature": "Außentemperatur"

@@ -10,6 +10,9 @@ import {
   heatPump,
   heatingRod,
   home,
+  homeForecast,
+  homeProfile,
+  loadForecast,
   timestamps,
 } from "./stories.fixture";
 
@@ -39,6 +42,17 @@ const Template: StoryFn<typeof ChargeChart> = (args) => ({
 // nothing to break down, the backend sends no details
 export const BaseLoadOnly = Template.bind({});
 BaseLoadOnly.args = { ...base, evopt: evopt([home]), demandDetails: [] };
+
+// consumption forecast replaces the learned profile until 20:00, the profile is drawn
+// for comparison where it was replaced
+export const ConsumptionForecast = Template.bind({});
+ConsumptionForecast.args = {
+  ...base,
+  evopt: evopt([homeForecast]),
+  demandDetails: [],
+  homeProfile,
+  loadForecast,
+};
 
 // heating loadpoints stacked on the base load
 export const HeatingLoadpoints = Template.bind({});

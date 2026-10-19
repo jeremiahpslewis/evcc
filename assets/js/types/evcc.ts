@@ -1449,6 +1449,8 @@ export interface Forecast {
   feedin?: ForecastSlot[];
   /** Temperature forecast in °C per time slot. */
   temperature?: ForecastSlot[];
+  /** House consumption forecast excluding charging and heating controlled by evcc, mean power in W per time slot. */
+  load?: ForecastSlot[];
 }
 
 // Ui* variants of the forecast wire types, expanded to objects with unix
@@ -1476,6 +1478,7 @@ export interface UiForecast {
   planner?: UiForecastSlot[];
   feedin?: UiForecastSlot[];
   temperature?: UiForecastSlot[];
+  load?: UiForecastSlot[];
 }
 
 export interface ServiceOption {
@@ -1515,7 +1518,7 @@ export type MeterType =
   | "consumer"
   | "circuit";
 export type MeterTemplateUsage = "grid" | "pv" | "battery" | "charge" | "aux";
-export type TariffType = "grid" | "feedIn" | "co2" | "planner" | "solar" | "temperature";
+export type TariffType = "grid" | "feedIn" | "co2" | "planner" | "solar" | "temperature" | "load";
 
 // see https://stackoverflow.com/a/54178819
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
@@ -1636,6 +1639,8 @@ export interface OptimizationDetails {
   timestamp: string[]; // Array of ISO timestamp strings
   batteryDetails: BatteryDetail[]; // Array of battery detail objects
   demandDetails: DemandDetail[] | null; // Profiles summarized into the household demand, null when there is nothing to break down
+  homeProfile?: number[]; // Learned consumption profile replaced by the consumption forecast, energy per slot (Wh), only while one is active
+  loadForecast?: boolean[]; // Slots taken from the consumption forecast instead of the learned profile, only while one is active
 }
 
 // Error response

@@ -605,7 +605,7 @@ func cleanupTariffRef(name string) {
 		return
 	}
 
-	for _, ref := range []*string{&refs.Grid, &refs.FeedIn, &refs.Co2, &refs.Planner, &refs.Temperature} {
+	for _, ref := range []*string{&refs.Grid, &refs.FeedIn, &refs.Co2, &refs.Planner, &refs.Temperature, &refs.Load} {
 		if *ref == name {
 			*ref = ""
 		}

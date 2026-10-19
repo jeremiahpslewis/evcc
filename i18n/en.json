@@ -1086,10 +1086,16 @@
         "titleEdit": "Edit Grid Import Tariff"
       },
       "legacyWarning": "New tariff configuration available! Remove and save your tariffs here to use the new guided process.",
+      "load": {
+        "description": "Forecast of the house consumption without charging and heating controlled by evcc, e.g. from Home Assistant. Replaces the learned consumption profile in the optimizer.",
+        "titleAdd": "Add Consumption Forecast",
+        "titleEdit": "Edit Consumption Forecast"
+      },
       "option": {
         "co2": "Add CO₂ forecast",
         "feedIn": "Add grid export tariff",
         "grid": "Add grid import tariff",
+        "load": "Add consumption forecast",
         "planner": "Add planner forecast",
         "solar": "Add solar forecast",
         "temperature": "Add temperature forecast"
@@ -1118,6 +1124,7 @@
         "co2": "CO₂ Intensity",
         "feedIn": "Grid Export Price",
         "grid": "Grid Import Price",
+        "load": "Consumption Forecast",
         "planner": "Planner",
         "solar": "Solar",
         "temperature": "Temperature Forecast"
@@ -1265,12 +1272,17 @@
     },
     "empty": {
       "co2": "See when grid energy in your region is clean. Charging plans will optimize for low emissions and calculate CO₂ savings.",
+      "load": "Forecast of your house consumption from an external source, e.g. Home Assistant. Replaces the learned consumption profile in the optimizer.",
       "price": "Configure your dynamic tariff to automatically optimize charging plans and calculate savings.",
       "setup": "Set up tariffs and forecasts",
       "solar": "See expected solar production for today and the coming days. Will also be used for automatic charging optimization in the future.",
       "temperature": "See the expected outdoor temperature for your location. Used to predict heating demand."
     },
     "hideLine": "hide line",
+    "load": {
+      "average": "Average",
+      "range": "Range"
+    },
     "modalTitle": "Forecast",
     "price": {
       "average": "Average",
@@ -1296,6 +1308,7 @@
     },
     "type": {
       "co2": "CO₂ Emissions",
+      "load": "Consumption",
       "price": "Grid Price",
       "solar": "Solar Production",
       "temperature": "Outdoor Temperature"
@@ -1358,6 +1371,13 @@
         "river": "River",
         "treemap": "Treemap"
       }
+    },
+    "consumption": {
+      "accuracy": "Forecast accuracy",
+      "consumed": "Consumed",
+      "default": "Default",
+      "defaultAccuracy": "Default accuracy",
+      "title": "Consumption forecast"
     },
     "direction": {
       "battery": {
