@@ -22,6 +22,9 @@ export default defineComponent({
 		labels: { type: Array as PropType<string[]>, default: () => [] },
 		// 15 minute buckets read as average power
 		power: Boolean,
+		// tooltip names of the prediction and of what happened
+		forecastLabel: { type: String, default: "" },
+		actualLabel: { type: String, default: "" },
 	},
 	computed: {
 		chartOption(): Record<string, unknown> {
@@ -48,10 +51,13 @@ export default defineComponent({
 						// forecast first, the deviation signed from the forecast's side
 						return tooltipTable(this.labels[idx] ?? "", [
 							{
-								name: this.$t("energy.group.forecast"),
+								name: this.forecastLabel || this.$t("energy.group.forecast"),
 								values: [fmt(span[0])],
 							},
-							{ name: this.$t("energy.production.produced"), values: [fmt(span[1])] },
+							{
+								name: this.actualLabel || this.$t("energy.production.produced"),
+								values: [fmt(span[1])],
+							},
 							{
 								name: this.$t("energy.production.deviation"),
 								values: [fmt(span[0] - span[1], true)],

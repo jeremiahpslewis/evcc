@@ -109,8 +109,10 @@ type Site struct {
 	prioritizer *prioritizer.Prioritizer // Power budgets
 	stats       *Stats                   // Stats
 
-	collectors map[string]*metrics.Collector // keyed by meter ref
-	tariffSlot time.Time                     // last persisted tariff slot
+	collectors    map[string]*metrics.Collector // keyed by meter ref
+	tariffSlot    time.Time                     // last persisted tariff slot
+	profileSlot   time.Time                     // slot of profileEnergy
+	profileEnergy *float64                      // default consumption profile of profileSlot in kWh, nil while incomplete
 
 	// cached measurement state, guarded by RWMutex
 	siteState
@@ -314,6 +316,15 @@ func (site *Site) Boot(log *util.Logger, loadpoints []*Loadpoint, tariffs *tarif
 		return err
 	}
 	site.collectors[metrics.Forecast] = fc
+
+	// consumption predictions, compared to the home consumption
+	for _, group := range []string{metrics.HomeForecast, metrics.HomeProfile} {
+		c, err := metrics.NewCollector(group, group, group)
+		if err != nil {
+			return err
+		}
+		site.collectors[group] = c
+	}
 
 	// temperature forecast collector (populated when TariffUsageTemperature is configured)
 	tc, err := metrics.NewCollector(metrics.Temperature, metrics.Temperature, metrics.Temperature)
@@ -609,6 +620,7 @@ func (site *Site) DumpConfig() {
 	site.log.INFO.Printf("    feed-in:   %s", trf(api.TariffUsageFeedIn))
 	site.log.INFO.Printf("    co2:       %s", presence[site.GetTariff(api.TariffUsageCo2) != nil])
 	site.log.INFO.Printf("    solar:     %s", presence[site.GetTariff(api.TariffUsageSolar) != nil])
+	site.log.INFO.Printf("    load:      %s", presence[site.GetTariff(api.TariffUsageLoad) != nil])
 
 	for i, lp := range site.loadpoints {
 		if lp == nil {

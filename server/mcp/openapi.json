@@ -4387,6 +4387,13 @@
             "items": {
               "$ref": "#/components/schemas/ForecastSlot"
             }
+          },
+          "load": {
+            "description": "House consumption forecast excluding charging and heating controlled by evcc, mean power in W per time slot.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ForecastSlot"
+            }
           }
         }
       },

@@ -61,6 +61,8 @@
 							:battery-details="evopt.details.batteryDetails"
 							:demand-details="demandDetails"
 							:demand-colors="demandColors"
+							:home-profile="homeProfile"
+							:load-forecast="loadForecast"
 							:timestamp="evopt.details.timestamp[0]"
 							:battery-colors="batteryColors"
 							:device-colors="deviceColors"
@@ -144,6 +146,8 @@
 							:battery-details="evopt.details.batteryDetails"
 							:demand-details="demandDetails"
 							:demand-colors="demandColors"
+							:home-profile="homeProfile"
+							:load-forecast="loadForecast"
 							:timestamps="evopt.details.timestamp"
 							:currency="currency"
 							:battery-colors="batteryColors"
@@ -288,6 +292,12 @@ export default defineComponent({
 		},
 		demandDetails(): DemandDetail[] {
 			return this.evopt?.details?.demandDetails || [];
+		},
+		homeProfile(): number[] {
+			return this.evopt?.details?.homeProfile || [];
+		},
+		loadForecast(): boolean[] {
+			return this.evopt?.details?.loadForecast || [];
 		},
 		// vehicle batteries and titled demand profiles are loadpoints
 		loadpointColorKeys(): string[] {

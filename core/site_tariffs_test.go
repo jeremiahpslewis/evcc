@@ -5,10 +5,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/evcc-io/evcc/api"
+	"github.com/evcc-io/evcc/core/metrics"
+	"github.com/evcc-io/evcc/db"
 	"github.com/evcc-io/evcc/tariff"
+	"github.com/evcc-io/evcc/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func TestForecastSlotEnergy(t *testing.T) {
@@ -137,4 +142,42 @@ func TestPercentileOf(t *testing.T) {
 		p90, _ := percentileOf(ratios, 0.9, solarScaleMinSamples)
 		assert.Less(t, p50, p90)
 	})
+}
+
+func TestPersistHomeForecasts(t *testing.T) {
+	require.NoError(t, db.NewInstance("sqlite", ":memory:"))
+	require.NoError(t, metrics.SetupSchema())
+
+	clk := clock.NewMock()
+	clk.Set(time.Now().Truncate(tariff.SlotDuration))
+
+	col, err := metrics.NewCollector(metrics.HomeForecast, metrics.HomeForecast, metrics.HomeForecast, metrics.WithClock(clk))
+	require.NoError(t, err)
+
+	// 2kW around now, the lookup itself uses the wall clock
+	ctrl := gomock.NewController(t)
+	load := api.NewMockTariff(ctrl)
+	load.EXPECT().Rates().Return(api.Rates{{
+		Start: time.Now().Add(-time.Hour),
+		End:   time.Now().Add(time.Hour),
+		Value: 2000,
+	}}, nil).AnyTimes()
+
+	// no home collector: the default profile is skipped
+	site := &Site{
+		log:        util.NewLogger("test"),
+		tariffs:    &tariff.Tariffs{Load: load},
+		collectors: map[string]*metrics.Collector{metrics.HomeForecast: col},
+	}
+
+	slot := clk.Now()
+	site.persistHomeForecasts()
+	clk.Add(tariff.SlotDuration)
+	site.persistHomeForecasts() // completes the first slot
+
+	res, err := metrics.QueryEnergy(slot, slot.Add(tariff.SlotDuration), "15m", false, metrics.EnergyFilter{Group: metrics.HomeForecast})
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.Len(t, res[0].Data, 1)
+	assert.InDelta(t, 0.5, res[0].Data[0].Energy, 1e-9, "2kW over a quarter hour")
 }

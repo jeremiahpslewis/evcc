@@ -200,8 +200,10 @@ func TestCoarsenHorizon(t *testing.T) {
 		TimeSeries: optimizer.TimeSeries{Dt: dt, Gt: series(100), Ft: series(200), PN: series(0.3), PE: series(0.1)},
 		Batteries:  []optimizer.BatteryConfig{{PDemand: series(10), SGoal: goal}, {}},
 	}
-	details := requestDetails{Timestamps: ts, DemandDetails: []demandDetail{{Values: series(50)}}}
-	gt, ft, home := lo.Sum(req.TimeSeries.Gt), lo.Sum(req.TimeSeries.Ft), lo.Sum(details.DemandDetails[0].Values)
+	// forecast for the first 40 hours, ending in the hourly part
+	covered := lo.RepeatBy(minLen, func(i int) bool { return i < 1+4*40 })
+	details := requestDetails{Timestamps: ts, DemandDetails: []demandDetail{{Values: series(50)}}, HomeProfile: series(70), LoadForecast: covered}
+	gt, ft, home, profile := lo.Sum(req.TimeSeries.Gt), lo.Sum(req.TimeSeries.Ft), lo.Sum(details.DemandDetails[0].Values), lo.Sum(details.HomeProfile)
 	pn, demand := req.TimeSeries.PN, req.Batteries[0].PDemand
 
 	coarsenHorizon(&req, &details, defaultCoarseSlotsAfter)
@@ -222,6 +224,12 @@ func TestCoarsenHorizon(t *testing.T) {
 	assert.InDelta(t, gt, lo.Sum(res.Gt), 0.1)
 	assert.InDelta(t, ft, lo.Sum(res.Ft), 0.1)
 	assert.InDelta(t, home, lo.Sum(details.DemandDetails[0].Values), 0.1)
+	assert.InDelta(t, profile, lo.Sum(details.HomeProfile), 0.1)
+	assert.Len(t, details.HomeProfile, len(res.Dt))
+	assert.Len(t, details.LoadForecast, len(res.Dt))
+	assert.True(t, details.LoadForecast[0])
+	assert.False(t, details.LoadForecast[len(res.Dt)-1])
+	assert.Equal(t, lo.Count(covered[:195], true), lo.Count(details.LoadForecast[:195], true), "quarter slots keep their flag")
 	assert.InDelta(t, lo.Mean(pn[195:199]), res.PN[195], 1e-4)
 	assert.InDelta(t, lo.Sum(demand[195:199]), req.Batteries[0].PDemand[195], 0.01)
 	assert.Equal(t, float32(5000), req.Batteries[0].SGoal[197])

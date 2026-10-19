@@ -693,6 +693,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ForecastSlot"
+        load:
+          description: House consumption forecast excluding charging and heating controlled by evcc, mean power in W per time slot.
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastSlot"
     ForecastSlot:
       description: A forecast time slot as [start, end, value] array. Start and end are unix seconds. Value unit depends on the forecast type.
       type: array

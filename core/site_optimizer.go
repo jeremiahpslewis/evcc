@@ -400,6 +400,8 @@ type requestDetails struct {
 	Timestamps     []time.Time     `json:"timestamp"`
 	BatteryDetails []batteryDetail `json:"batteryDetails"`
 	DemandDetails  []demandDetail  `json:"demandDetails"`
+	HomeProfile    []float32       `json:"homeProfile,omitempty"`  // base load profile replaced by the load forecast, Wh per slot
+	LoadForecast   []bool          `json:"loadForecast,omitempty"` // slots the load forecast replaced the profile in
 }
 
 type demandType string
@@ -536,10 +538,20 @@ func (site *Site) optimizerRequest(battery []types.Measurement) (optimizer.Optim
 		return req, details, err
 	}
 
+	// a configured load forecast replaces the profile where it has slots, the
+	// profile is kept for comparison
+	profile := slices.Clone(gt)
+	loadForecast := site.applyLoadForecast(gt)
+	replaced := lo.Count(loadForecast, true)
+	if replaced > 0 {
+		site.log.DEBUG.Printf("optimizer: home slots replaced by load forecast: %d of %d", replaced, len(gt))
+	}
+
 	// blend measured energy of the last metrics slot into the first slots
 	if v := site.measuredSlotEnergy(metrics.Home); v > 0 {
 		orig := slices.Clone(gt[:min(optimizerDecaySlots, len(gt))])
 		blendMeasured(gt, v, optimizerDecaySlots)
+		blendMeasured(profile, v, optimizerDecaySlots)
 		site.log.DEBUG.Printf("optimizer: home slots updated with measured %.0fWh: %.0f -> %.0f", v, orig, gt[:len(orig)])
 	}
 
@@ -586,6 +598,11 @@ func (site *Site) optimizerRequest(battery []types.Measurement) (optimizer.Optim
 		DemandDetails: []demandDetail{
 			{Type: demandTypeHome, Values: prorate(home, firstSlotDuration)},
 		},
+	}
+
+	if replaced > 0 {
+		details.HomeProfile = prorate(profile, firstSlotDuration)
+		details.LoadForecast = loadForecast
 	}
 
 	if site.circuit != nil {
@@ -1470,6 +1487,11 @@ func coarsenHorizon(req *optimizer.OptimizationInput, details *requestDetails, a
 	}
 	for i := range details.DemandDetails {
 		details.DemandDetails[i].Values = sum(details.DemandDetails[i].Values)
+	}
+	details.HomeProfile = sum(details.HomeProfile)
+	if details.LoadForecast != nil {
+		// a merged slot counts as forecast if any of its quarters was
+		details.LoadForecast = lo.Map(starts, func(s, g int) bool { return slices.Contains(details.LoadForecast[s:ends[g]], true) })
 	}
 	details.Timestamps = lo.Map(starts, func(s, _ int) time.Time { return ts[s] })
 }

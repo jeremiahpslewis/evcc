@@ -82,6 +82,12 @@ export function stepAlpha(i: number, n: number): number {
 	return Math.max(minAlpha, 1 - (n - 1 - i) * step);
 }
 
+// a line needs two points, a lone value is drawn as a dot
+function lineSymbol(values: (number | null)[]): { symbol: string; symbolSize?: number } {
+	const points = values.filter((v) => v != null).length;
+	return points === 1 ? { symbol: "circle", symbolSize: 6 } : { symbol: "none" };
+}
+
 // Multiple entities stack into one bar; grid and meter render side-by-side.
 const STACKED_GROUPS: ReadonlySet<string> = new Set(["loadpoint", "consumer", "pv", "battery"]);
 
@@ -96,6 +102,9 @@ export default defineComponent({
 		overlayColor: { type: String, default: "" },
 		overlayLabel: { type: String, default: "" },
 		showOverlay: { type: Boolean, default: false },
+		// a second line to compare against, greyed out, e.g. the default consumption profile
+		reference: { type: Array as PropType<HistorySeries[]>, default: () => [] },
+		referenceLabel: { type: String, default: "" },
 		focusedEntity: { type: Number as PropType<number | null>, default: null },
 		period: { type: String as PropType<PERIODS>, required: true },
 		from: { type: Date, required: true },
@@ -189,7 +198,8 @@ export default defineComponent({
 			const overlay = this.showOverlay ? this.overlay : [];
 			return Math.max(
 				peak(this.visibleSeries, (slot) => slot.energy),
-				peak(overlay, (slot) => slot.energy)
+				peak(overlay, (slot) => slot.energy),
+				peak(this.reference, (slot) => slot.energy)
 			);
 		},
 		// axisPeak is in kW(h), the shared scale works in W(h)
@@ -474,7 +484,7 @@ export default defineComponent({
 				type: "line",
 				data: overlayValues,
 				smooth: true,
-				symbol: "none",
+				...lineSymbol(overlayValues),
 				connectNulls: true,
 				lineStyle: { color: overlayCol, ...lineDefaults },
 				itemStyle: { color: overlayCol },
@@ -501,6 +511,33 @@ export default defineComponent({
 						}
 					: {}),
 			});
+
+			if (this.reference.length) {
+				const referenceValues: (number | null)[] = Array.from(
+					{ length: cats.length },
+					() => null
+				);
+				for (const s of this.reference) {
+					for (const slot of s.data) {
+						const idx = index.get(slotKey(slot.start));
+						if (idx === undefined) continue;
+						referenceValues[idx] = (referenceValues[idx] || 0) + slot.energy * factor;
+					}
+				}
+				const referenceCol = colors.muted || "";
+				result.push({
+					id: "reference",
+					name: this.referenceLabel || "reference",
+					type: "line",
+					data: referenceValues,
+					smooth: true,
+					...lineSymbol(referenceValues),
+					connectNulls: true,
+					lineStyle: { color: referenceCol, ...lineDefaults, type: "dashed" },
+					itemStyle: { color: referenceCol },
+					z: 3,
+				});
+			}
 
 			if (this.subPanel) result.push(...this.subPanel.series);
 
@@ -796,6 +833,8 @@ export default defineComponent({
 
 						// the overlay line's value in this slot, e.g. the solar forecast
 						const forecast = params.find((p) => p.seriesId === "overlay")?.value;
+						const reference = params.find((p) => p.seriesId === "reference")?.value;
+						const predicted = forecast != null || reference != null;
 						const rows: TooltipRow[] = indices.map((i, idx) => {
 							const t = rowValues[idx] ?? { energy: 0, returnEnergy: 0 };
 							// a single value covers both sides, a sink can draw from above and below
@@ -809,7 +848,7 @@ export default defineComponent({
 									? (nameByIdx.get(i) ?? "")
 									: this.prices
 										? this.$t("energy.grid.energy")
-										: forecast != null
+										: predicted
 											? this.singleEntityName(this.series[idx]!)
 											: undefined,
 								values,
@@ -861,6 +900,13 @@ export default defineComponent({
 								name: this.overlayLabel,
 								values: [formatValue(forecast)],
 								total: true,
+							});
+						}
+						if (reference != null) {
+							rows.push({
+								name: this.referenceLabel,
+								values: [formatValue(reference)],
+								total: forecast == null,
 							});
 						}
 						// one entity with its soc or temperature in the day view: a named row

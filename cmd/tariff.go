@@ -49,6 +49,7 @@ func runTariff(cmd *cobra.Command, args []string) {
 		api.TariffUsageCo2:     tariffs.Co2,
 		api.TariffUsagePlanner: tariffs.Planner,
 		api.TariffUsageSolar:   tariffs.Solar,
+		api.TariffUsageLoad:    tariffs.Load,
 	} {
 		key := u.String()
 		if name != "" && key != name {
@@ -74,6 +75,8 @@ func runTariff(cmd *cobra.Command, args []string) {
 			unit += "Footprint (gCO2/kWh)"
 		case api.TariffTypeSolar:
 			unit = "Yield (W)"
+		case api.TariffTypeLoad:
+			unit = "Load (W)"
 		default:
 			if c := conf.Tariffs.Currency; c != "" {
 				unit += fmt.Sprintf(" (%s/kWh)", c)

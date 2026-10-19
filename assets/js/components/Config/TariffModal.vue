@@ -69,6 +69,7 @@ import tariffPriceYaml from "./defaultYaml/tariffPrice.yaml?raw";
 import tariffCo2Yaml from "./defaultYaml/tariffCo2.yaml?raw";
 import tariffSolarYaml from "./defaultYaml/tariffSolar.yaml?raw";
 import tariffTemperatureYaml from "./defaultYaml/tariffTemperature.yaml?raw";
+import tariffLoadYaml from "./defaultYaml/tariffLoad.yaml?raw";
 
 const initialValues = {
 	type: ConfigType.Template,
@@ -137,7 +138,7 @@ export default defineComponent({
 	methods: {
 		provideTemplateOptions(products: Product[]): TemplateGroup[] {
 			// Use different custom option text for tariffs vs forecasts
-			const isForecast = ["co2", "planner", "solar", "temperature"].includes(
+			const isForecast = ["co2", "planner", "solar", "temperature", "load"].includes(
 				this.tariffType || ""
 			);
 			const customLabel = isForecast
@@ -241,6 +242,8 @@ export default defineComponent({
 					values.yaml = tariffSolarYaml;
 				} else if (this.tariffType === "temperature") {
 					values.yaml = tariffTemperatureYaml;
+				} else if (this.tariffType === "load") {
+					values.yaml = tariffLoadYaml;
 				}
 			}
 		},

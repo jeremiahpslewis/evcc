@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _TariffUsageName = "co2feedingridplannersolartemperature"
+const _TariffUsageName = "co2feedingridplannersolartemperatureload"
 
-var _TariffUsageIndex = [...]uint8{0, 3, 9, 13, 20, 25, 36}
+var _TariffUsageIndex = [...]uint8{0, 3, 9, 13, 20, 25, 36, 40}
 
-const _TariffUsageLowerName = "co2feedingridplannersolartemperature"
+const _TariffUsageLowerName = "co2feedingridplannersolartemperatureload"
 
 func (i TariffUsage) String() string {
 	i -= 1
@@ -31,9 +31,10 @@ func _TariffUsageNoOp() {
 	_ = x[TariffUsagePlanner-(4)]
 	_ = x[TariffUsageSolar-(5)]
 	_ = x[TariffUsageTemperature-(6)]
+	_ = x[TariffUsageLoad-(7)]
 }
 
-var _TariffUsageValues = []TariffUsage{TariffUsageCo2, TariffUsageFeedIn, TariffUsageGrid, TariffUsagePlanner, TariffUsageSolar, TariffUsageTemperature}
+var _TariffUsageValues = []TariffUsage{TariffUsageCo2, TariffUsageFeedIn, TariffUsageGrid, TariffUsagePlanner, TariffUsageSolar, TariffUsageTemperature, TariffUsageLoad}
 
 var _TariffUsageNameToValueMap = map[string]TariffUsage{
 	_TariffUsageName[0:3]:   TariffUsageCo2,
@@ -42,6 +43,7 @@ var _TariffUsageNameToValueMap = map[string]TariffUsage{
 	_TariffUsageName[13:20]: TariffUsagePlanner,
 	_TariffUsageName[20:25]: TariffUsageSolar,
 	_TariffUsageName[25:36]: TariffUsageTemperature,
+	_TariffUsageName[36:40]: TariffUsageLoad,
 }
 
 var _TariffUsageLowerNameToValueMap = map[string]TariffUsage{
@@ -51,6 +53,7 @@ var _TariffUsageLowerNameToValueMap = map[string]TariffUsage{
 	_TariffUsageLowerName[13:20]: TariffUsagePlanner,
 	_TariffUsageLowerName[20:25]: TariffUsageSolar,
 	_TariffUsageLowerName[25:36]: TariffUsageTemperature,
+	_TariffUsageLowerName[36:40]: TariffUsageLoad,
 }
 
 var _TariffUsageNames = []string{
@@ -60,6 +63,7 @@ var _TariffUsageNames = []string{
 	_TariffUsageName[13:20],
 	_TariffUsageName[20:25],
 	_TariffUsageName[25:36],
+	_TariffUsageName[36:40],
 }
 
 // TariffUsageString retrieves an enum value from the enum constants string name.

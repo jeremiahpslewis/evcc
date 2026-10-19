@@ -45,6 +45,7 @@
 	--evcc-price: #ff912fff;
 	--evcc-co2: #00916eff;
 	--evcc-temperature: #1b6fba;
+	--evcc-load: #8a63d2;
 	--evcc-background: var(--bs-gray-bright);
 	--evcc-box: var(--bs-white);
 	--evcc-box-border: var(--bs-gray-brighter);
@@ -210,6 +211,10 @@ h5 {
 
 .text-temperature {
 	color: var(--evcc-temperature) !important;
+}
+
+.text-load {
+	color: var(--evcc-load) !important;
 }
 
 .text-export {

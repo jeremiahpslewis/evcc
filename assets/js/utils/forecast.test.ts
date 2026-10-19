@@ -22,6 +22,7 @@ describe("expandForecast", () => {
       planner: undefined,
       feedin: undefined,
       temperature: undefined,
+      load: undefined,
     });
   });
 });
