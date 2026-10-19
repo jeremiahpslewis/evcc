@@ -305,6 +305,15 @@
 							@enable="handleDisable('tariff', temperatureTariff.id, false)"
 						/>
 						<TariffCard
+							v-if="loadTariff"
+							:tariff="loadTariff"
+							tariff-type="load"
+							:has-error="hasDeviceError('tariff', loadTariff.name)"
+							:tags="deviceTags('tariff', loadTariff.name)"
+							@edit="openModal('tariff', { type: 'load', id: loadTariff.id })"
+							@enable="handleDisable('tariff', loadTariff.id, false)"
+						/>
+						<TariffCard
 							v-if="plannerTariff"
 							:tariff="plannerTariff"
 							tariff-type="planner"
@@ -870,6 +879,7 @@ export default defineComponent({
 				planner: "",
 				solar: [] as string[],
 				temperature: "",
+				load: "",
 			},
 			site: {
 				grid: "",
@@ -936,6 +946,7 @@ export default defineComponent({
 					this.feedInTariff,
 					this.co2Tariff,
 					this.temperatureTariff,
+					this.loadTariff,
 					this.plannerTariff,
 				].filter(Boolean).length + this.solarTariffs.length;
 			// key = config.<key>.title i18n stem and fatal error class (see errorClass exceptions)
@@ -1167,6 +1178,10 @@ export default defineComponent({
 				? store.state?.tariffTemperature !== undefined
 				: !!this.temperatureTariff;
 		},
+		loadTariff() {
+			const name = this.tariffRefs?.load;
+			return name ? this.tariffs.find((t) => t.name === name) : null;
+		},
 		solarTariffs() {
 			const names = this.tariffRefs?.solar || [];
 			return names.map((name) => this.tariffs.find((t) => t.name === name)).filter(Boolean);
@@ -1182,6 +1197,7 @@ export default defineComponent({
 			if (!this.co2Tariff) types.push("co2");
 			types.push("solar"); // Solar can have multiple
 			if (!this.temperatureTariff) types.push("temperature");
+			if (!this.loadTariff) types.push("load");
 			if (!this.plannerTariff) types.push("planner");
 			return types;
 		},

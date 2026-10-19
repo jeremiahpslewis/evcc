@@ -143,12 +143,14 @@ func (site *Site) publishTariffs(greenShareHome float64, greenShareLoadpoints fl
 		Planner     forecastSeries `json:"planner,omitempty"`
 		Solar       *solarDetails  `json:"solar,omitempty"`
 		Temperature forecastSeries `json:"temperature,omitempty"`
+		Load        forecastSeries `json:"load,omitempty"`
 	}{
 		Co2:         forecastRates(tariff.Rates(site.GetTariff(api.TariffUsageCo2))),
 		FeedIn:      forecastRates(tariff.Rates(site.GetTariff(api.TariffUsageFeedIn))),
 		Planner:     forecastRates(tariff.Rates(site.GetTariff(api.TariffUsagePlanner))),
 		Grid:        forecastRates(tariff.Rates(site.GetTariff(api.TariffUsageGrid))),
 		Temperature: forecastRates(tariff.Rates(site.GetTariff(api.TariffUsageTemperature))),
+		Load:        forecastRates(tariff.Rates(site.GetTariff(api.TariffUsageLoad))),
 	}
 
 	// calculate adjusted solar rates
@@ -159,6 +161,62 @@ func (site *Site) publishTariffs(greenShareHome float64, greenShareLoadpoints fl
 	site.publish(keys.Forecast, util.NewSharder(keys.Forecast, fc))
 
 	site.persistTariffs()
+	site.persistHomeForecasts()
+}
+
+// persistHomeForecasts records the consumption forecast and the default profile for the
+// slot covering now, the predictions the home consumption is compared to. The default is
+// recorded while the optimizer runs on it or a forecast replaces it.
+func (site *Site) persistHomeForecasts() {
+	now := time.Now()
+
+	forecast := site.GetTariff(api.TariffUsageLoad)
+	if r, err := tariff.At(forecast, now); err == nil {
+		// mean power in W to the slot's energy in kWh
+		site.setSlotEnergy(metrics.HomeForecast, max(0, r.Value)*tariff.SlotDuration.Hours()/1e3)
+	}
+
+	if forecast == nil && !optimizerEnabled() {
+		return
+	}
+
+	if v, ok := site.slotProfile(now); ok {
+		site.setSlotEnergy(metrics.HomeProfile, v)
+	}
+}
+
+// slotProfile returns the default profile's energy in kWh for the slot covering now,
+// queried once per slot
+func (site *Site) slotProfile(now time.Time) (float64, bool) {
+	if _, ok := site.collectors[metrics.Home]; !ok {
+		return 0, false
+	}
+
+	if slot := now.Truncate(tariff.SlotDuration); !slot.Equal(site.profileSlot) {
+		site.profileSlot = slot
+		site.profileEnergy = nil
+
+		if p, err := site.homeProfile(1); err == nil && len(p) > 0 {
+			site.profileEnergy = new(p[0] / 1e3) // Wh to kWh
+		}
+	}
+
+	if site.profileEnergy == nil {
+		return 0, false
+	}
+	return *site.profileEnergy, true
+}
+
+// setSlotEnergy sets the energy of the current slot of a collector fed by a prediction
+func (site *Site) setSlotEnergy(ref string, energy float64) {
+	c, ok := site.collectors[ref]
+	if !ok {
+		return
+	}
+
+	if err := c.SetEnergy(energy); err != nil {
+		site.log.ERROR.Printf("%s collector: %v", ref, err)
+	}
 }
 
 // persistTariffs stores tariff values once per 15min boundary. Like the meter

@@ -174,10 +174,11 @@ type Tariffs struct {
 	Planner     config.Typed
 	Solar       []config.Typed
 	Temperature config.Typed
+	Load        config.Typed
 }
 
 func (c Tariffs) IsConfigured() bool {
-	return c.Currency != "" || c.Grid.Type != "" || c.FeedIn.Type != "" || c.Co2.Type != "" || c.Planner.Type != "" || len(c.Solar) > 0 || c.Temperature.Type != ""
+	return c.Currency != "" || c.Grid.Type != "" || c.FeedIn.Type != "" || c.Co2.Type != "" || c.Planner.Type != "" || len(c.Solar) > 0 || c.Temperature.Type != "" || c.Load.Type != ""
 }
 
 type TariffRefs struct {
@@ -187,15 +188,16 @@ type TariffRefs struct {
 	Planner     string   `json:"planner"`
 	Solar       []string `json:"solar"`
 	Temperature string   `json:"temperature"`
+	Load        string   `json:"load"`
 }
 
 func (refs TariffRefs) IsConfigured() bool {
-	return refs.Grid != "" || refs.FeedIn != "" || refs.Co2 != "" || refs.Planner != "" || len(refs.Solar) > 0 || refs.Temperature != ""
+	return refs.Grid != "" || refs.FeedIn != "" || refs.Co2 != "" || refs.Planner != "" || len(refs.Solar) > 0 || refs.Temperature != "" || refs.Load != ""
 }
 
 func (refs TariffRefs) Used() iter.Seq[string] {
 	return func(yield func(string) bool) {
-		for _, ref := range append([]string{refs.Grid, refs.FeedIn, refs.Co2, refs.Planner, refs.Temperature}, refs.Solar...) {
+		for _, ref := range append([]string{refs.Grid, refs.FeedIn, refs.Co2, refs.Planner, refs.Temperature, refs.Load}, refs.Solar...) {
 			if ref != "" {
 				if !yield(ref) {
 					return

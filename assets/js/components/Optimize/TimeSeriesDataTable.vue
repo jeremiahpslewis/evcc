@@ -36,7 +36,11 @@
 						<td :colspan="slotCount"></td>
 					</tr>
 					<tr v-for="row in group.rows" :key="row.label + (row.unit || '')">
-						<th scope="row" class="sticky-col fw-normal">
+						<th
+							scope="row"
+							class="sticky-col fw-normal"
+							:class="{ 'text-muted': row.muted }"
+						>
 							{{ row.label }}
 							<span v-if="row.unit" class="text-muted small">{{ row.unit }}</span>
 						</th>
@@ -47,6 +51,7 @@
 							:class="{
 								zero: row.nums[index] === 0,
 								'hour-start': hourStarts[index],
+								'text-muted': row.muted,
 							}"
 							:style="heatStyle(row, index)"
 						>
@@ -101,6 +106,7 @@ interface Row {
 	heatColor?: string;
 	aMax?: number;
 	ref?: number; // heat reference; defaults to the row's absolute maximum
+	muted?: boolean; // for comparison only, not an input of the plan
 }
 
 interface RowGroup {
@@ -132,6 +138,16 @@ export default defineComponent({
 		},
 		demandColors: {
 			type: Array as PropType<string[]>,
+			default: () => [],
+		},
+		// learned consumption profile, set while a consumption forecast replaces it
+		homeProfile: {
+			type: Array as PropType<number[]>,
+			default: () => [],
+		},
+		// request slots taken from the consumption forecast
+		loadForecast: {
+			type: Array as PropType<boolean[]>,
 			default: () => [],
 		},
 		timestamps: {
@@ -186,6 +202,7 @@ export default defineComponent({
 						this.powerRow("Solar Forecast", ts.ft, colors.forecast || ""),
 						demand,
 						...this.demandRows(demand),
+						...this.profileRows(demand),
 						{
 							label: "Time Step",
 							unit: "h",
@@ -210,6 +227,25 @@ export default defineComponent({
 					{ ref }
 				)
 			);
+		},
+		// the default profile the consumption forecast replaced in the household demand,
+		// blank where the forecast did not reach and the demand above is the default
+		profileRows(total: Row): Row[] {
+			if (!this.homeProfile.length || !this.loadForecast.some(Boolean)) return [];
+			const ref = Math.max(...total.nums.map(Math.abs));
+			// greyed out: shown to compare, the demand above is what the plan used
+			const row = this.powerRow("Household Demand (default)", this.homeProfile, "", {
+				ref,
+				muted: true,
+			});
+			const replaced = (i: number) => !!this.loadForecast[i];
+			return [
+				{
+					...row,
+					display: row.display.map((v, i) => (replaced(i) ? v : "")),
+					nums: row.nums.map((v, i) => (replaced(i) ? v : 0)),
+				},
+			];
 		},
 		responseGroups(): RowGroup[] {
 			const res = this.evopt.res;

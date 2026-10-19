@@ -28,6 +28,32 @@ func (site *Site) homeProfile(minLen int) ([]float64, error) {
 	return lo.Map(tileAndTrim(base[:], minLen), func(v float64, _ int) float64 { return v * 1e3 }), nil
 }
 
+// applyLoadForecast replaces the home profile slots covered by the configured load
+// forecast and returns which slots it replaced, nil without forecast. The forecast is
+// the household load without loadpoints in W, its rates may be of any length. Slots
+// beyond the forecast keep the profile.
+func (site *Site) applyLoadForecast(gt []float64) []bool {
+	rates := currentRates(site.GetTariff(api.TariffUsageLoad))
+	if len(rates) == 0 {
+		return nil
+	}
+
+	start := time.Now().Truncate(tariff.SlotDuration)
+	covered := make([]bool, len(gt))
+
+	for i := range gt {
+		r, err := rates.At(start.Add(time.Duration(i) * tariff.SlotDuration))
+		if err != nil {
+			continue
+		}
+
+		gt[i] = max(0, r.Value) * tariff.SlotDuration.Hours() // W to Wh
+		covered[i] = true
+	}
+
+	return covered
+}
+
 // heatingDemand is the forecast demand in Wh a single heating loadpoint contributes
 // to the home load
 type heatingDemand struct {

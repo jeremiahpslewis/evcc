@@ -22,11 +22,11 @@ import {
 	lineDefaults,
 } from "./echarts";
 import colors from "@/colors";
-import formatter from "@/mixins/formatter";
+import formatter, { POWER_UNIT } from "@/mixins/formatter";
 import chartMixin from "./chartMixin";
 import type { UiForecastSlot } from "@/types/evcc";
 
-export type ValueChartType = "co2" | "temperature";
+export type ValueChartType = "co2" | "temperature" | "load";
 
 export default defineComponent({
 	name: "ValueChart",
@@ -37,14 +37,15 @@ export default defineComponent({
 	},
 	computed: {
 		color(): string {
-			return (this.type === "co2" ? colors.co2 : colors.temperature) || "";
+			const byType = { co2: colors.co2, temperature: colors.temperature, load: colors.load };
+			return byType[this.type] || "";
 		},
 		slots(): UiForecastSlot[] {
 			return filterForecastSlots(this.rates, this.startDate, this.endDate);
 		},
 		yMin(): number {
-			// co2 is never negative, temperature may be
-			if (this.type === "co2" || !this.slots.length) return 0;
+			// co2 and load are never negative, temperature may be
+			if (this.type !== "temperature" || !this.slots.length) return 0;
 			return Math.min(0, Math.floor(Math.min(...this.slots.map((s) => s.value))));
 		},
 		markPoints(): {
@@ -61,7 +62,8 @@ export default defineComponent({
 				value: string;
 				label?: Record<string, unknown>;
 			}[] = [];
-			if (slots[minIdx]) {
+			// consumption bottoms out at the base load, its peaks are what matter
+			if (slots[minIdx] && this.type !== "load") {
 				points.push({
 					coord: [clampStart(slots[minIdx]!.start, this.startDate), slots[minIdx]!.value],
 					value: this.fmtShort(slots[minIdx]!.value),
@@ -108,7 +110,7 @@ export default defineComponent({
 					splitNumber: 2,
 					axisLabel: {
 						color: colors.muted,
-						formatter: (value: number) => `${Math.round(value)}`,
+						formatter: (value: number) => this.fmtAxis(value),
 					},
 				}),
 				series: [
@@ -131,10 +133,16 @@ export default defineComponent({
 	},
 	methods: {
 		fmtShort(value: number): string {
+			if (this.type === "load") return this.fmtW(value, POWER_UNIT.KW, true, 1);
 			return this.type === "co2" ? this.fmtGrams(value) : this.fmtTemperature(value);
 		},
 		fmtLong(value: number): string {
+			if (this.type === "load") return this.fmtW(value, POWER_UNIT.KW, true, 1);
 			return this.type === "co2" ? this.fmtCo2Medium(value) : this.fmtTemperature(value);
+		},
+		fmtAxis(value: number): string {
+			if (this.type === "load") return this.fmtW(value, POWER_UNIT.KW, false, 1);
+			return `${Math.round(value)}`;
 		},
 	},
 });

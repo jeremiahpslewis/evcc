@@ -28,6 +28,10 @@ TODO
 
 Collected 15min energy profile over the last 4 weeks, averaged per slot. A per-slot percentile (e.g. 50 = median, robust against a few heavy days) can be configured via `/api/profilepercentile` instead.
 
+A load forecast (`tariffs.load`, a custom tariff with `tariff: load`) replaces the profile for the slots it covers. Its value is the mean household power in W per rate without the loadpoints, which are modelled separately; rates may be of any length. Slots beyond the forecast keep the profile. While the forecast is active the published result's `details` carry `loadForecast`, one boolean per slot aligned with `details.timestamp` and true where the forecast replaced the profile (a slot merged to an hour beyond 48h is true if any of its quarters was), and `homeProfile`, the replaced profile in Wh per slot for comparison. Both are omitted when the solve used the profile throughout: no forecast configured, the forecast stale after twice its interval, or none of its rates within the horizon. The measured value blending below applies to either.
+
+Both predictions are recorded per slot, the forecast whenever one is configured, the profile while the optimizer is enabled or a forecast replaces it (metrics groups `homeforecast` and `homeprofile`). The Energy view compares them to the consumption.
+
 ### Measured value blending
 
 The solar forecast and the base load profile are anchored to the current situation

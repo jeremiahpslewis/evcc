@@ -190,6 +190,67 @@
 						</div>
 					</div>
 				</div>
+				<div v-if="hasHomePrediction" class="card-row mb-4">
+					<div class="row gx-0 gx-sm-4 gy-4">
+						<div class="col-12 col-lg-9 col-xxl-10">
+							<Card
+								:title="$t('energy.consumption.title')"
+								:subtitle="fmtKWh(homeTotal)"
+								edge-to-edge
+								class="h-100"
+								data-testid="energy-consumption-forecast"
+								data-anchor
+							>
+								<template #icon>
+									<shopicon-regular-home></shopicon-regular-home>
+								</template>
+								<GroupChart
+									group="home"
+									:color="groupColor('consumer')"
+									:series="homeSeries"
+									:overlay="homeForecastSeries"
+									:overlay-color="colors.load || ''"
+									:overlay-label="$t('energy.group.forecast')"
+									:show-overlay="hasHomeForecast"
+									:reference="homeProfileSeries"
+									:reference-label="$t('energy.consumption.default')"
+									:height="200"
+									:period="effectivePeriod"
+									:from="from"
+									:to="to"
+									@slot="drillDown"
+								/>
+								<LegendList class="mt-4" :legends="consumptionLegends" />
+							</Card>
+						</div>
+						<div class="col-12 col-lg-3 col-xxl-2">
+							<StatCards :stats="consumptionStats">
+								<template v-if="homeForecastDeviation" #homeForecast>
+									<ForecastDeviation
+										class="mt-3"
+										:spans="homeForecastDeviation"
+										:color="colors.load || ''"
+										:labels="bucketLabels"
+										:power="isDay"
+										:forecast-label="$t('energy.group.forecast')"
+										:actual-label="$t('energy.consumption.consumed')"
+									/>
+								</template>
+								<template v-if="homeProfileDeviation" #homeProfile>
+									<ForecastDeviation
+										class="mt-3"
+										:spans="homeProfileDeviation"
+										:color="colors.muted || ''"
+										:labels="bucketLabels"
+										:power="isDay"
+										:forecast-label="$t('energy.consumption.default')"
+										:actual-label="$t('energy.consumption.consumed')"
+									/>
+								</template>
+							</StatCards>
+						</div>
+					</div>
+				</div>
 				<Card
 					v-for="(bat, i) in batteries"
 					:key="bat.title"
@@ -387,6 +448,7 @@ import Card from "../components/Helper/Card.vue";
 import "@h2d2/shopicons/es/regular/powersupply";
 import "@h2d2/shopicons/es/regular/sun";
 import "@h2d2/shopicons/es/regular/batterythreequarters";
+import "@h2d2/shopicons/es/regular/home";
 import DownloadButton from "../components/Helper/DownloadButton.vue";
 import PeriodSelector from "../components/Sessions/PeriodSelector.vue";
 import DateNavigator from "../components/Sessions/DateNavigator.vue";
@@ -408,6 +470,7 @@ import Stat from "../components/Energy/Stat.vue";
 import MixBar from "../components/Energy/MixBar.vue";
 import GridStats from "../components/Energy/GridStats.vue";
 import ForecastDeviation from "../components/Energy/ForecastDeviation.vue";
+import { predictionAccuracy } from "../components/Energy/accuracy";
 import CostStats from "../components/Energy/CostStats.vue";
 import ConsumerTreemap from "../components/Energy/ConsumerTreemap.vue";
 import EntityDetail from "../components/Energy/EntityDetail.vue";
@@ -445,6 +508,8 @@ import store from "../store";
 
 const ENERGY_PERIODS = [PERIODS.DAY, PERIODS.MONTH, PERIODS.YEAR];
 const OVERVIEW_HEIGHT = 300;
+// predictions recorded alongside the meters, no energy that flowed
+const PREDICTION_GROUPS = ["forecast", "homeforecast", "homeprofile"];
 
 function daysInMonth(year: number, month: number) {
 	return new Date(year, month, 0).getDate();
@@ -681,7 +746,7 @@ export default defineComponent({
 		flowSlots(): HistorySlot[] {
 			const slots = new Map<string, HistorySlot>();
 			for (const s of this.series) {
-				if (s.group === "forecast") continue;
+				if (PREDICTION_GROUPS.includes(s.group)) continue;
 				for (const slot of s.data) {
 					if (!slots.has(slot.start)) slots.set(slot.start, slot);
 				}
@@ -858,6 +923,79 @@ export default defineComponent({
 		},
 		forecastSeries(): HistorySeries[] {
 			return this.series.filter((s) => s.group === "forecast");
+		},
+		// the house consumption and what the consumption forecast and the default profile
+		// expected of it
+		homeSeries(): HistorySeries[] {
+			return this.withData("home").map((s) => ({
+				...s,
+				title: this.$t("energy.group.consumer"),
+			}));
+		},
+		homeForecastSeries(): HistorySeries[] {
+			return this.withData("homeforecast");
+		},
+		homeProfileSeries(): HistorySeries[] {
+			return this.withData("homeprofile");
+		},
+		hasHomeForecast(): boolean {
+			return this.homeForecastSeries.length > 0;
+		},
+		hasHomePrediction(): boolean {
+			return (
+				this.homeSeries.length > 0 &&
+				(this.hasHomeForecast || this.homeProfileSeries.length > 0)
+			);
+		},
+		homeTotal(): number {
+			return this.total(this.homeSeries);
+		},
+		homeForecastDeviation(): ([number, number] | null)[] | null {
+			return this.hasHomeForecast ? this.deviation("homeforecast", "home") : null;
+		},
+		homeProfileDeviation(): ([number, number] | null)[] | null {
+			return this.homeProfileSeries.length ? this.deviation("homeprofile", "home") : null;
+		},
+		consumptionStats(): StatItem[] {
+			return [
+				this.accuracyStat(
+					"homeForecast",
+					this.$t("energy.consumption.accuracy"),
+					this.homeForecastDeviation
+				),
+				this.accuracyStat(
+					"homeProfile",
+					this.$t("energy.consumption.defaultAccuracy"),
+					this.homeProfileDeviation
+				),
+			].filter((s): s is StatItem => s !== null);
+		},
+		// the consumption, then both predictions as lines, the default greyed out
+		consumptionLegends(): Legend[] {
+			const list: Legend[] = [
+				{
+					label: this.$t("energy.group.consumer"),
+					color: groupColor("consumer"),
+					value: this.fmtKWh(this.homeTotal),
+				},
+			];
+			if (this.hasHomeForecast) {
+				list.push({
+					label: this.$t("energy.group.forecast"),
+					color: colors.load || "",
+					value: this.fmtKWh(this.total(this.homeForecastSeries)),
+					type: "line",
+				});
+			}
+			if (this.homeProfileSeries.length) {
+				list.push({
+					label: this.$t("energy.consumption.default"),
+					color: colors.muted || "",
+					value: this.fmtKWh(this.total(this.homeProfileSeries)),
+					type: "line",
+				});
+			}
+			return list;
 		},
 		hasForecast(): boolean {
 			return this.forecastSeries.some((s) => s.data.some((slot) => slot.energy > 0));
@@ -1280,6 +1418,37 @@ export default defineComponent({
 				}
 			}
 			return out;
+		},
+		// per bucket a prediction and what happened, null where no prediction was recorded
+		deviation(group: string, actual: string): ([number, number] | null)[] {
+			const real = this.buckets(actual, "energy");
+			const known = new Set(
+				this.series
+					.filter((s) => s.group === group)
+					.flatMap((s) => s.data.map((slot) => this.bucketIndex(slot.start)))
+			);
+			return this.buckets(group, "energy").map((p, i): [number, number] | null =>
+				known.has(i) ? [p, real[i] || 0] : null
+			);
+		},
+		// accuracy and how far the prediction sat above or below what was consumed
+		accuracyStat(
+			key: string,
+			label: string,
+			spans: ([number, number] | null)[] | null
+		): StatItem | null {
+			const res = predictionAccuracy(spans || []);
+			if (!res) return null;
+			return {
+				key,
+				label,
+				number: this.ratio(res.accuracy),
+				format: (v: number) => this.fmtPercentage(v),
+				sub: this.$t(
+					res.delta >= 0 ? "energy.production.above" : "energy.production.below",
+					{ value: this.fmtKWh(Math.abs(res.delta)) }
+				),
+			};
 		},
 		bucketIndex(start: string): number {
 			const d = new Date(start);

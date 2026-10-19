@@ -89,6 +89,11 @@ export function stepAlpha(i: number, n: number): number {
 	return Math.max(minAlpha, 1 - (n - 1 - i) * step);
 }
 
+// a line needs two points: a lone value keeps its hover dot visible
+function loneDot(values: (number | null)[], color: string): Record<string, unknown> {
+	return values.filter((v) => v != null).length === 1 ? { itemStyle: { color, opacity: 1 } } : {};
+}
+
 // Multiple entities stack into one bar; grid and meter render side-by-side.
 const STACKED_GROUPS: ReadonlySet<string> = new Set(["loadpoint", "consumer", "pv", "battery"]);
 
@@ -103,6 +108,9 @@ export default defineComponent({
 		overlayColor: { type: String, default: "" },
 		overlayLabel: { type: String, default: "" },
 		showOverlay: { type: Boolean, default: false },
+		// a second line to compare against, greyed out, e.g. the default consumption profile
+		reference: { type: Array as PropType<HistorySeries[]>, default: () => [] },
+		referenceLabel: { type: String, default: "" },
 		focusedEntity: { type: Number as PropType<number | null>, default: null },
 		period: { type: String as PropType<PERIODS>, required: true },
 		from: { type: Date, required: true },
@@ -196,7 +204,8 @@ export default defineComponent({
 			const overlay = this.showOverlay ? this.overlay : [];
 			return Math.max(
 				peak(this.visibleSeries, (slot) => slot.energy),
-				peak(overlay, (slot) => slot.energy)
+				peak(overlay, (slot) => slot.energy),
+				peak(this.reference, (slot) => slot.energy)
 			);
 		},
 		// axisPeak is in kW(h), the shared scale works in W(h)
@@ -469,6 +478,7 @@ export default defineComponent({
 				data: overlayValues,
 				smooth: true,
 				...hoverDot(overlayCol),
+				...loneDot(overlayValues, overlayCol),
 				connectNulls: true,
 				lineStyle: { color: overlayCol, ...lineDefaults },
 				z: 4,
@@ -476,9 +486,9 @@ export default defineComponent({
 			const casing = lineCasing(overlay, 3);
 			// a line through slot centers stops half a slot short of the plot edges: its
 			// first and last value repeated out to them on the boundary axis
-			const edges = (line: Record<string, unknown>) => {
+			const edges = (line: Record<string, unknown>, values = overlayValues) => {
 				const edge = (i: number, x: number) =>
-					overlayValues[i] == null
+					values[i] == null
 						? []
 						: [
 								{
@@ -486,15 +496,15 @@ export default defineComponent({
 									id: `${line["id"]}-edge${i}`,
 									xAxisIndex: 1,
 									data: [
-										[x, overlayValues[i]],
-										[i, overlayValues[i]],
+										[x, values[i]],
+										[i, values[i]],
 									],
 									symbol: "none",
 									silent: true,
 									emphasis: { disabled: true },
 								},
 							];
-				const last = overlayValues.length - 1;
+				const last = values.length - 1;
 				return [...edge(0, -0.5), ...edge(last, last + 0.5)];
 			};
 			// the side labels ride on the overlay, not on its casing
@@ -518,9 +528,42 @@ export default defineComponent({
 						}
 					: {}),
 			});
+			const referenceValues: (number | null)[] = Array.from(
+				{ length: cats.length },
+				() => null
+			);
+			for (const s of this.reference) {
+				for (const slot of s.data) {
+					const idx = index.get(slotKey(slot.start));
+					if (idx === undefined) continue;
+					referenceValues[idx] = (referenceValues[idx] || 0) + slot.energy * factor;
+				}
+			}
+			const referenceCol = colors.muted || "";
+			const dashed = { type: "dashed" } as const;
+			const reference = {
+				id: "reference",
+				name: this.referenceLabel || "reference",
+				type: "line",
+				data: referenceValues,
+				smooth: true,
+				...hoverDot(referenceCol, dashed),
+				...loneDot(referenceValues, referenceCol),
+				connectNulls: true,
+				lineStyle: { color: referenceCol, ...lineDefaults, ...dashed },
+				z: 3,
+			};
+			if (this.reference.length) result.push(reference);
+
 			// grid 0 only has the boundary axis without a panel
 			result.push(
-				...(this.subPanel ? this.subPanel.series : [...edges(casing), ...edges(overlay)])
+				...(this.subPanel
+					? this.subPanel.series
+					: [
+							...edges(casing),
+							...edges(overlay),
+							...(this.reference.length ? edges(reference, referenceValues) : []),
+						])
 			);
 
 			// Always render import + export series per entity, even if one direction
@@ -813,6 +856,8 @@ export default defineComponent({
 
 						// the overlay line's value in this slot, e.g. the solar forecast
 						const forecast = params.find((p) => p.seriesId === "overlay")?.value;
+						const reference = params.find((p) => p.seriesId === "reference")?.value;
+						const predicted = forecast != null || reference != null;
 						const rows: TooltipRow[] = indices.map((i, idx) => {
 							const t = rowValues[idx] ?? { energy: 0, returnEnergy: 0 };
 							// a single value covers both sides, a sink can draw from above and below
@@ -826,7 +871,7 @@ export default defineComponent({
 									? (nameByIdx.get(i) ?? "")
 									: this.prices
 										? this.$t("energy.grid.energy")
-										: forecast != null
+										: predicted
 											? this.singleEntityName(this.series[idx]!)
 											: undefined,
 								values,
@@ -878,6 +923,13 @@ export default defineComponent({
 								name: this.overlayLabel,
 								values: [formatValue(forecast)],
 								total: true,
+							});
+						}
+						if (reference != null) {
+							rows.push({
+								name: this.referenceLabel,
+								values: [formatValue(reference)],
+								total: forecast == null,
 							});
 						}
 						// one entity with its soc or temperature in the day view: a named row

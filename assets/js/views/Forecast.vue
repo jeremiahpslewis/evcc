@@ -132,6 +132,7 @@
 import "@h2d2/shopicons/es/regular/sun";
 import "@h2d2/shopicons/es/regular/eco1";
 import "@h2d2/shopicons/es/regular/thermometerhalf";
+import "@h2d2/shopicons/es/regular/home";
 import { defineComponent, markRaw } from "vue";
 import Header from "../components/Top/Header.vue";
 import Card from "../components/Helper/Card.vue";
@@ -180,11 +181,14 @@ export default defineComponent({
 				this.forecast.grid ||
 				this.forecast.solar ||
 				this.forecast.co2 ||
-				this.forecast.temperature
+				this.forecast.temperature ||
+				this.forecast.load
 			);
 		},
 		valueForecastTypes(): ValueChartType[] {
-			return (["co2", "temperature"] as ValueChartType[]).filter((t) => this.forecast[t]);
+			return (["co2", "temperature", "load"] as ValueChartType[]).filter(
+				(t) => this.forecast[t]
+			);
 		},
 		emptyItems() {
 			return [
@@ -192,6 +196,7 @@ export default defineComponent({
 				{ type: "price", icon: markRaw(DynamicPriceIcon) },
 				{ type: "co2", icon: "shopicon-regular-eco1" },
 				{ type: "temperature", icon: "shopicon-regular-thermometerhalf" },
+				{ type: "load", icon: "shopicon-regular-home" },
 			];
 		},
 		startDate(): Date {
@@ -210,6 +215,7 @@ export default defineComponent({
 				...(this.forecast.grid || []),
 				...(this.forecast.co2 || []),
 				...(this.forecast.temperature || []),
+				...(this.forecast.load || []),
 			]) {
 				const t = new Date(s.end).getTime();
 				if (t > latest) latest = t;
