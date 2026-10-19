@@ -63,6 +63,46 @@ func TestGetChargeStatus(t *testing.T) {
 	}
 }
 
+func TestGetAttribute(t *testing.T) {
+	tests := []struct {
+		name, attribute, body string
+		want                  string
+		wantErr               error
+		wantErrText           string
+	}{
+		{"string unquoted", "hvac_action", `{"state":"heat","attributes":{"hvac_action":"heating"}}`, "heating", nil, ""},
+		{"number", "current_temperature", `{"state":"heat","attributes":{"current_temperature":21.5}}`, "21.5", nil, ""},
+		{"list as json", "forecast", `{"state":"900","attributes":{"forecast":[{"start":"2026-10-19T00:00:00Z","value":900}]}}`, `[{"start":"2026-10-19T00:00:00Z","value":900}]`, nil, ""},
+		{"reported while unavailable", "forecast", `{"state":"unavailable","attributes":{"forecast":[]}}`, "[]", nil, ""},
+		{"null", "forecast", `{"state":"900","attributes":{"forecast":null}}`, "", api.ErrNotAvailable, ""},
+		{"dropped while unavailable", "forecast", `{"state":"unavailable","attributes":{"friendly_name":"Foo"}}`, "", api.ErrNotAvailable, ""},
+		{"missing", "forecast", `{"state":"900","attributes":{"friendly_name":"Foo"}}`, "", nil, "missing attribute forecast for entity sensor.foo"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/api/states/sensor.foo", r.URL.Path)
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, tc.body)
+			}))
+			srv.Start()
+
+			res, err := newTestConnection(srv.URL).GetAttribute("sensor.foo", tc.attribute)
+
+			switch {
+			case tc.wantErr != nil:
+				assert.ErrorIs(t, err, tc.wantErr)
+			case tc.wantErrText != "":
+				assert.EqualError(t, err, tc.wantErrText)
+			default:
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, res)
+			}
+		})
+	}
+}
+
 func TestNewStatusMapDuplicate(t *testing.T) {
 	_, err := NewStatusMap("foo", "foo", "")
 	assert.Error(t, err)

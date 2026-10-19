@@ -1,6 +1,7 @@
 package homeassistant
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -77,12 +78,16 @@ func (c *Connection) GetServices() ([]ServiceDomainResponse, error) {
 	return res, err
 }
 
+// stateURI returns the state endpoint of an entity
+func (c *Connection) stateURI(entity string) string {
+	return fmt.Sprintf("%s/api/states/%s", c.instance.URI(), url.PathEscape(entity))
+}
+
 // GetState retrieves the state of an entity
 func (c *Connection) GetState(entity string) (StateResponse, error) {
 	var res StateResponse
-	uri := fmt.Sprintf("%s/api/states/%s", c.instance.URI(), url.PathEscape(entity))
 
-	if err := c.GetJSON(uri, &res); err != nil {
+	if err := c.GetJSON(c.stateURI(entity), &res); err != nil {
 		return res, err
 	}
 
@@ -91,6 +96,40 @@ func (c *Connection) GetState(entity string) (StateResponse, error) {
 	}
 
 	return res, nil
+}
+
+// GetAttribute retrieves an attribute of an entity. String values are returned
+// unquoted, all other values (numbers, lists, objects) as json. Unlike the state,
+// an attribute is read whatever the state is, as long as the entity reports it.
+func (c *Connection) GetAttribute(entity, attribute string) (string, error) {
+	var res struct {
+		State      string                     `json:"state"`
+		Attributes map[string]json.RawMessage `json:"attributes"`
+	}
+
+	if err := c.GetJSON(c.stateURI(entity), &res); err != nil {
+		return "", err
+	}
+
+	val, ok := res.Attributes[attribute]
+	if !ok {
+		// unavailable entities drop their integration specific attributes
+		if res.State == "unknown" || res.State == "unavailable" {
+			return "", api.ErrNotAvailable
+		}
+		return "", fmt.Errorf("missing attribute %s for entity %s", attribute, entity)
+	}
+
+	if string(val) == "null" {
+		return "", api.ErrNotAvailable
+	}
+
+	var s string
+	if err := json.Unmarshal(val, &s); err == nil {
+		return s, nil
+	}
+
+	return string(val), nil
 }
 
 // GetIntState retrieves the state of an entity as int64
