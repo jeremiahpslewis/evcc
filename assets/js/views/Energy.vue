@@ -470,7 +470,7 @@ import Stat from "../components/Energy/Stat.vue";
 import MixBar from "../components/Energy/MixBar.vue";
 import GridStats from "../components/Energy/GridStats.vue";
 import ForecastDeviation from "../components/Energy/ForecastDeviation.vue";
-import { predictionAccuracy } from "../components/Energy/accuracy";
+import { pairBuckets, predictionAccuracy } from "../components/Energy/accuracy";
 import CostStats from "../components/Energy/CostStats.vue";
 import ConsumerTreemap from "../components/Energy/ConsumerTreemap.vue";
 import EntityDetail from "../components/Energy/EntityDetail.vue";
@@ -1419,16 +1419,21 @@ export default defineComponent({
 			}
 			return out;
 		},
-		// per bucket a prediction and what happened, null where no prediction was recorded
+		// per bucket a prediction and what happened, null where either was not recorded
 		deviation(group: string, actual: string): ([number, number] | null)[] {
-			const real = this.buckets(actual, "energy");
-			const known = new Set(
+			return pairBuckets(
+				this.buckets(group, "energy"),
+				this.buckets(actual, "energy"),
+				this.recordedBuckets(group),
+				this.recordedBuckets(actual)
+			);
+		},
+		// buckets a group has recorded data in
+		recordedBuckets(group: string): Set<number> {
+			return new Set(
 				this.series
 					.filter((s) => s.group === group)
 					.flatMap((s) => s.data.map((slot) => this.bucketIndex(slot.start)))
-			);
-			return this.buckets(group, "energy").map((p, i): [number, number] | null =>
-				known.has(i) ? [p, real[i] || 0] : null
 			);
 		},
 		// accuracy and how far the prediction sat above or below what was consumed
