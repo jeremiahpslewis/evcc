@@ -264,18 +264,18 @@ func TestHomePowerFromBalance(t *testing.T) {
 		grid, pv, battery     float64
 		aux, consumer, charge float64
 		estimated             bool
-		home                  float64
-		floored               bool
+		home, overshoot       float64
 	}{
-		{"balance", 1000, 0, 0, 0, 300, 0, false, 1000, false},
-		{"negative pv ignored", 1000, -50, 0, 0, 0, 0, false, 1000, false},
-		{"measured charge power below consumers", 7750, 0, 0, 0, 400, 7400, false, 350, false},
-		{"estimate within balance", 11500, 0, 0, 0, 400, 11040, true, 460, false},
-		{"estimate exceeds balance", 7750, 0, 0, 0, 400, 11040, true, 400, true},
-		{"estimate exceeds balance, aux and consumers", 7750, 0, 0, 200, 400, 11040, true, 600, true},
-		{"estimate exceeds balance while battery charges", 9600, 0, -1850, 0, 400, 11040, true, 400, true},
-		{"estimate exceeds balance without consumers", 7750, 0, 0, 0, 0, 11040, true, 0, false},
-		{"negative meter readings ignored", 7750, 0, 0, -20, 0, 11040, true, 0, false},
+		{"balance", 1000, 0, 0, 0, 300, 0, false, 1000, 0},
+		{"negative pv ignored", 1000, -50, 0, 0, 0, 0, false, 1000, 0},
+		{"measured charge power below consumers", 7750, 0, 0, 0, 400, 7400, false, 350, 0},
+		{"estimate within balance", 11500, 0, 0, 0, 400, 11040, true, 460, 0},
+		{"estimate slightly above balance", 7750, 0, 0, 0, 400, 7400, true, 400, 50},
+		{"estimate exceeds balance", 7750, 0, 0, 0, 400, 11040, true, 400, 3690},
+		{"estimate exceeds balance, aux and consumers", 7750, 0, 0, 200, 400, 11040, true, 600, 3890},
+		{"estimate exceeds balance while battery charges", 9600, 0, -1850, 0, 400, 11040, true, 400, 3690},
+		{"estimate exceeds balance without consumers", 7750, 0, 0, 0, 0, 11040, true, 0, 3290},
+		{"negative meter readings ignored", 7750, 0, 0, -20, 0, 11040, true, 0, 3290},
 	}
 
 	for _, tc := range tc {
@@ -288,9 +288,9 @@ func TestHomePowerFromBalance(t *testing.T) {
 				battery:       types.BatteryState{Power: tc.battery},
 			}
 
-			home, floored := homePowerFromBalance(state, tc.charge, tc.estimated)
+			home, overshoot := homePowerFromBalance(state, tc.charge, tc.estimated)
 			assert.Equal(t, tc.home, home)
-			assert.Equal(t, tc.floored, floored)
+			assert.Equal(t, tc.overshoot, overshoot)
 		})
 	}
 }
@@ -317,4 +317,31 @@ func TestChargePowerEstimated(t *testing.T) {
 			assert.Equal(t, tc.res, site.chargePowerEstimated())
 		})
 	}
+}
+
+func TestSetChargePowerOvershoot(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	measured := &Loadpoint{chargeMeter: newChargeMeter(api.NewMockMeter(ctrl)), chargePower: 7400}
+	onePhase := &Loadpoint{chargeMeter: newChargeMeter(struct{}{}), chargePower: 3680}
+	threePhase := &Loadpoint{chargeMeter: newChargeMeter(struct{}{}), chargePower: 11040}
+	site := &Site{loadpoints: []*Loadpoint{measured, onePhase, nil, threePhase}}
+
+	// spread over the estimated loadpoints by their power, the measured one keeps its own
+	site.setChargePowerOvershoot(2944)
+	assert.Equal(t, 7400.0, measured.recordedChargePower())
+	assert.InDelta(t, 3680.0-736, onePhase.recordedChargePower(), 1e-9)
+	assert.InDelta(t, 11040.0-2208, threePhase.recordedChargePower(), 1e-9)
+
+	// control keeps the estimate
+	assert.Equal(t, 11040.0, threePhase.GetChargePower())
+
+	// never below zero
+	site.setChargePowerOvershoot(1e5)
+	assert.Equal(t, 0.0, threePhase.recordedChargePower())
+
+	// a cycle without overshoot records the estimate again
+	site.setChargePowerOvershoot(0)
+	assert.Equal(t, 11040.0, threePhase.recordedChargePower())
+	assert.Equal(t, 3680.0, onePhase.recordedChargePower())
 }
