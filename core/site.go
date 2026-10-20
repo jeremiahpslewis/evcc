@@ -1418,26 +1418,46 @@ func (site *Site) update(lp updater) {
 // the offered current for lack of a charge meter
 func (site *Site) chargePowerEstimated() bool {
 	return lo.ContainsBy(site.loadpoints, func(lp *Loadpoint) bool {
-		return lp != nil && !lp.HasChargeMeter() && lp.GetChargePower() > 0
+		return lp != nil && lp.chargePowerEstimated()
 	})
 }
 
 // homePowerFromBalance returns the household consumption: the site balance less
 // charging. A charge power estimated from the offered current overstates charging
 // when the vehicle draws less, which would hide the household, so while one is
-// estimated the metered aux and consumer meters set a floor. floored reports that
-// the floor applied.
-func homePowerFromBalance(state siteState, totalChargePower float64, estimated bool) (power float64, floored bool) {
+// estimated the metered aux and consumer meters set a floor. overshoot is the
+// estimated charge power the balance does not cover once those are served.
+func homePowerFromBalance(state siteState, totalChargePower float64, estimated bool) (power, overshoot float64) {
 	// ignore negative pvPower values as that means it is not an energy source but consumption
-	power = state.gridPower + max(0, state.pvPower) + state.battery.Power - totalChargePower
+	balance := state.gridPower + max(0, state.pvPower) + state.battery.Power - totalChargePower
 
-	power = max(power, 0)
-
-	if metered := max(0, state.auxPower) + max(0, state.consumerPower); estimated && metered > power {
-		return metered, true
+	if !estimated {
+		return max(balance, 0), 0
 	}
 
-	return power, false
+	metered := max(0, state.auxPower) + max(0, state.consumerPower)
+	return max(balance, metered), max(0, metered-balance)
+}
+
+// setChargePowerOvershoot spreads the estimated charge power the balance does not cover
+// over the estimated loadpoints by their power, so that their recorded energy leaves it out
+func (site *Site) setChargePowerOvershoot(overshoot float64) {
+	estimated := lo.Filter(site.loadpoints, func(lp *Loadpoint, _ int) bool {
+		return lp != nil && lp.chargePowerEstimated()
+	})
+	total := lo.SumBy(estimated, func(lp *Loadpoint) float64 { return lp.GetChargePower() })
+
+	for _, lp := range site.loadpoints {
+		if lp == nil {
+			continue
+		}
+
+		var share float64
+		if overshoot > 0 && total > 0 && lp.chargePowerEstimated() {
+			share = overshoot * lp.GetChargePower() / total
+		}
+		lp.setChargePowerOvershoot(share)
+	}
 }
 
 // updatePower calculates the site power balance and updates the given loadpoint
@@ -1458,10 +1478,11 @@ func (site *Site) updatePower(lp updater, state siteState, totalChargePower floa
 		site.Unlock()
 	}
 
-	homePower, floored := homePowerFromBalance(state, totalChargePower, site.chargePowerEstimated())
-	if floored {
-		site.log.DEBUG.Printf("home power: estimated charge power exceeds the balance, using metered consumers: %.0fW", homePower)
+	homePower, overshoot := homePowerFromBalance(state, totalChargePower, site.chargePowerEstimated())
+	if overshoot > 0 {
+		site.log.DEBUG.Printf("home power: estimated charge power exceeds the balance by %.0fW, using metered consumers: %.0fW", overshoot, homePower)
 	}
+	site.setChargePowerOvershoot(overshoot)
 	site.publish(keys.HomePower, homePower)
 
 	if homePower > 0 {

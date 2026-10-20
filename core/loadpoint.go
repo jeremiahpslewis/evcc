@@ -174,15 +174,16 @@ type Loadpoint struct {
 	optimizerPlan     optimizerPlan     // optimizer charging schedule
 
 	// cached state
-	status         api.ChargeStatus // Charger status
-	chargePower    float64          // Charging power
-	chargeCurrents []float64        // Phase currents
-	connectedTime  time.Time        // Time when vehicle was connected
-	connectPending bool             // connect notification deferred until vehicle detection settles
-	welcomeUntil   time.Time        // welcome charge deadline, set until surplus confirms the session
-	pvTimer        time.Time        // PV enabled/disable timer
-	phaseTimer     time.Time        // 1p3p switch timer
-	wakeUpTimer    *Timer           // Vehicle wake-up timeout
+	status          api.ChargeStatus // Charger status
+	chargePower     float64          // Charging power
+	chargeOvershoot float64          // estimated charge power the site balance does not cover, left out of the recorded energy
+	chargeCurrents  []float64        // Phase currents
+	connectedTime   time.Time        // Time when vehicle was connected
+	connectPending  bool             // connect notification deferred until vehicle detection settles
+	welcomeUntil    time.Time        // welcome charge deadline, set until surplus confirms the session
+	pvTimer         time.Time        // PV enabled/disable timer
+	phaseTimer      time.Time        // 1p3p switch timer
+	wakeUpTimer     *Timer           // Vehicle wake-up timeout
 
 	// charge progress
 	vehicleSoc              float64       // Vehicle or charger soc
@@ -2102,6 +2103,27 @@ func (lp *Loadpoint) pvEnableScalePhases(phases int) bool {
 	return err == nil
 }
 
+// chargePowerEstimated reports whether the loadpoint charges with its power estimated
+// from the offered current for lack of a charge meter
+func (lp *Loadpoint) chargePowerEstimated() bool {
+	return !lp.HasChargeMeter() && lp.GetChargePower() > 0
+}
+
+// setChargePowerOvershoot sets the estimated charge power the site balance does not cover
+func (lp *Loadpoint) setChargePowerOvershoot(power float64) {
+	lp.Lock()
+	defer lp.Unlock()
+	lp.chargeOvershoot = power
+}
+
+// recordedChargePower is the charge power recorded as charged energy: the charge power
+// without the estimated part the site balance does not cover. Control keeps chargePower.
+func (lp *Loadpoint) recordedChargePower() float64 {
+	lp.RLock()
+	defer lp.RUnlock()
+	return max(0, lp.chargePower-lp.chargeOvershoot)
+}
+
 // UpdateChargePowerAndCurrents updates charge meter power and currents for load management
 func (lp *Loadpoint) UpdateChargePowerAndCurrents() float64 {
 	power, err := backoff.RetryWithData(lp.chargeMeter.CurrentPower, modbus.Backoff())
@@ -2281,7 +2303,7 @@ func (lp *Loadpoint) publishChargeProgress() {
 	}
 
 	if lp.chargeEnergy != nil {
-		lp.chargeEnergy.AddEnergy(importTotal, nil, lp.chargePower)
+		lp.chargeEnergy.AddEnergy(importTotal, nil, lp.recordedChargePower())
 		if v := lp.GetSoc(); v > 0 {
 			lp.chargeEnergy.SetSocTemp(v, lp.chargerHasFeature(api.Heating))
 		}
@@ -2531,7 +2553,7 @@ func (lp *Loadpoint) Update(sitePower, batteryPower float64, consumption, feedin
 
 	// update ChargeRater here to make sure initial meter update is caught
 	lp.bus.Publish(evChargeCurrent, lp.offeredCurrent)
-	lp.bus.Publish(evChargePower, lp.chargePower)
+	lp.bus.Publish(evChargePower, lp.recordedChargePower())
 
 	// update progress and soc before status is updated
 	lp.publishChargeProgress()
