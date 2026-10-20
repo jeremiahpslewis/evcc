@@ -141,6 +141,7 @@ type siteState struct {
 	pvPower       float64            // PV power
 	excessDCPower float64            // PV excess DC charge power (hybrid only)
 	auxPower      float64            // Aux power
+	consumerPower float64            // Consumer meters power
 	battery       types.BatteryState // Battery cached and published state
 }
 
@@ -1024,6 +1025,13 @@ func (site *Site) updateConsumerMeters() {
 	}
 
 	mm := site.collectMeters("consumer", site.consumerMeters)
+	consumerPower := lo.SumBy(mm, func(m types.Measurement) float64 {
+		return m.Power
+	})
+
+	site.Lock()
+	site.consumerPower = consumerPower
+	site.Unlock()
 
 	site.addMeterEnergy(site.consumerMeters, mm)
 
@@ -1400,6 +1408,32 @@ func (site *Site) update(lp updater) {
 	site.stats.Update(site)
 }
 
+// chargePowerEstimated reports whether a charging loadpoint's power is estimated from
+// the offered current for lack of a charge meter
+func (site *Site) chargePowerEstimated() bool {
+	return lo.ContainsBy(site.loadpoints, func(lp *Loadpoint) bool {
+		return lp != nil && !lp.HasChargeMeter() && lp.GetChargePower() > 0
+	})
+}
+
+// homePowerFromBalance returns the household consumption: the site balance less
+// charging. A charge power estimated from the offered current overstates charging
+// when the vehicle draws less, which would hide the household, so while one is
+// estimated the metered aux and consumer meters set a floor. floored reports that
+// the floor applied.
+func homePowerFromBalance(state siteState, totalChargePower float64, estimated bool) (power float64, floored bool) {
+	// ignore negative pvPower values as that means it is not an energy source but consumption
+	power = state.gridPower + max(0, state.pvPower) + state.battery.Power - totalChargePower
+
+	power = max(power, 0)
+
+	if metered := max(0, state.auxPower) + max(0, state.consumerPower); estimated && metered > power {
+		return metered, true
+	}
+
+	return power, false
+}
+
 // updatePower calculates the site power balance and updates the given loadpoint
 func (site *Site) updatePower(lp updater, state siteState, totalChargePower float64, consumption, feedin api.Rates) {
 	// prioritize if possible
@@ -1418,9 +1452,10 @@ func (site *Site) updatePower(lp updater, state siteState, totalChargePower floa
 		site.Unlock()
 	}
 
-	// ignore negative pvPower values as that means it is not an energy source but consumption
-	homePower := state.gridPower + max(0, state.pvPower) + state.battery.Power - totalChargePower
-	homePower = max(homePower, 0)
+	homePower, floored := homePowerFromBalance(state, totalChargePower, site.chargePowerEstimated())
+	if floored {
+		site.log.DEBUG.Printf("home power: estimated charge power exceeds the balance, using metered consumers: %.0fW", homePower)
+	}
 	site.publish(keys.HomePower, homePower)
 
 	if homePower > 0 {

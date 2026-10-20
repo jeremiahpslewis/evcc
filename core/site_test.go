@@ -257,3 +257,64 @@ func TestSiteSkipsDisabledDevices(t *testing.T) {
 	assert.Error(t, site.updateGridMeter())
 	assert.Empty(t, site.curtailables())
 }
+
+func TestHomePowerFromBalance(t *testing.T) {
+	tc := []struct {
+		title                 string
+		grid, pv, battery     float64
+		aux, consumer, charge float64
+		estimated             bool
+		home                  float64
+		floored               bool
+	}{
+		{"balance", 1000, 0, 0, 0, 300, 0, false, 1000, false},
+		{"negative pv ignored", 1000, -50, 0, 0, 0, 0, false, 1000, false},
+		{"measured charge power below consumers", 7750, 0, 0, 0, 400, 7400, false, 350, false},
+		{"estimate within balance", 11500, 0, 0, 0, 400, 11040, true, 460, false},
+		{"estimate exceeds balance", 7750, 0, 0, 0, 400, 11040, true, 400, true},
+		{"estimate exceeds balance, aux and consumers", 7750, 0, 0, 200, 400, 11040, true, 600, true},
+		{"estimate exceeds balance while battery charges", 9600, 0, -1850, 0, 400, 11040, true, 400, true},
+		{"estimate exceeds balance without consumers", 7750, 0, 0, 0, 0, 11040, true, 0, false},
+		{"negative meter readings ignored", 7750, 0, 0, -20, 0, 11040, true, 0, false},
+	}
+
+	for _, tc := range tc {
+		t.Run(tc.title, func(t *testing.T) {
+			state := siteState{
+				gridPower:     tc.grid,
+				pvPower:       tc.pv,
+				auxPower:      tc.aux,
+				consumerPower: tc.consumer,
+				battery:       types.BatteryState{Power: tc.battery},
+			}
+
+			home, floored := homePowerFromBalance(state, tc.charge, tc.estimated)
+			assert.Equal(t, tc.home, home)
+			assert.Equal(t, tc.floored, floored)
+		})
+	}
+}
+
+func TestChargePowerEstimated(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	measured := &Loadpoint{chargeMeter: newChargeMeter(api.NewMockMeter(ctrl)), chargePower: 7400}
+	estimated := &Loadpoint{chargeMeter: newChargeMeter(struct{}{}), chargePower: 11040}
+	idle := &Loadpoint{chargeMeter: newChargeMeter(struct{}{})}
+
+	for _, tc := range []struct {
+		title      string
+		loadpoints []*Loadpoint
+		res        bool
+	}{
+		{"none", nil, false},
+		{"measured", []*Loadpoint{measured}, false},
+		{"estimated, not charging", []*Loadpoint{idle}, false},
+		{"estimated, charging", []*Loadpoint{measured, estimated}, true},
+	} {
+		t.Run(tc.title, func(t *testing.T) {
+			site := &Site{loadpoints: tc.loadpoints}
+			assert.Equal(t, tc.res, site.chargePowerEstimated())
+		})
+	}
+}
