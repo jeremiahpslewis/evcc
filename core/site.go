@@ -1495,7 +1495,7 @@ func (site *Site) updatePower(lp updater, state siteState, totalChargePower floa
 	// fix for: https://github.com/evcc-io/evcc/issues/11032
 	nonChargePower := homePower + max(0, -state.battery.Power)
 	greenShareHome := site.greenShare(0, homePower)
-	greenShareLoadpoints := site.greenShare(nonChargePower, nonChargePower+totalChargePower)
+	greenShareLoadpoints := site.greenShare(nonChargePower, nonChargePower+totalChargePower-overshoot)
 
 	// TODO
 	if lp != nil {

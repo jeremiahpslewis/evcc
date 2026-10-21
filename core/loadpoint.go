@@ -2121,6 +2121,9 @@ func (lp *Loadpoint) setChargePowerOvershoot(power float64) {
 func (lp *Loadpoint) recordedChargePower() float64 {
 	lp.RLock()
 	defer lp.RUnlock()
+	if lp.chargeOvershoot == 0 {
+		return lp.chargePower
+	}
 	return max(0, lp.chargePower-lp.chargeOvershoot)
 }
 
