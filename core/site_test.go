@@ -344,4 +344,9 @@ func TestSetChargePowerOvershoot(t *testing.T) {
 	site.setChargePowerOvershoot(0)
 	assert.Equal(t, 11040.0, threePhase.recordedChargePower())
 	assert.Equal(t, 3680.0, onePhase.recordedChargePower())
+
+	// energy returned by a measured bidirectional loadpoint is recorded as is
+	returning := &Loadpoint{chargeMeter: newChargeMeter(api.NewMockMeter(ctrl)), chargePower: -3000}
+	(&Site{loadpoints: []*Loadpoint{returning, threePhase}}).setChargePowerOvershoot(2944)
+	assert.Equal(t, -3000.0, returning.recordedChargePower())
 }
