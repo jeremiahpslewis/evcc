@@ -1196,6 +1196,7 @@
       "consumed": "Verbraucht",
       "default": "Standard",
       "defaultAccuracy": "Genauigkeit Standard",
+      "energyOnly": "Nach Energie bewertet, nicht nach Zeitpunkt: {parts}",
       "title": "Verbrauchsvorhersage"
     },
     "direction": {

@@ -89,3 +89,15 @@ func (v *Wrapper) Type() api.TariffType {
 
 	return 0
 }
+
+// Parts returns the metered parts of a forecast tariff once created, nil otherwise
+func (v *Wrapper) Parts() map[string]api.Rates {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if t, ok := v.instance().(interface{ Parts() map[string]api.Rates }); ok {
+		return t.Parts()
+	}
+
+	return nil
+}

@@ -112,7 +112,7 @@ type Site struct {
 	collectors    map[string]*metrics.Collector // keyed by meter ref
 	tariffSlot    time.Time                     // last persisted tariff slot
 	profileSlot   time.Time                     // slot of profileEnergy
-	profileEnergy *float64                      // default consumption profile of profileSlot in kWh, nil while incomplete
+	profileEnergy map[string]*float64           // default profiles of profileSlot in kWh by collector, nil while incomplete
 
 	// cached measurement state, guarded by RWMutex
 	siteState
@@ -392,6 +392,26 @@ func (site *Site) Boot(log *util.Logger, loadpoints []*Loadpoint, tariffs *tarif
 			return err
 		}
 		site.collectors[ref] = me
+	}
+
+	// predictions of metered parts of the consumption forecast, fed while the load forecast
+	// names the meter as a part. Registered for every aux and consumer meter since a load
+	// forecast that was unavailable at boot names its parts only once it is created.
+	for _, dev := range lo.Flatten([][]config.Device[api.Meter]{site.auxMeters, site.consumerMeters}) {
+		name := dev.Config().Name
+		for _, group := range []string{metrics.ConsumerForecast, metrics.ConsumerProfile} {
+			c, err := metrics.NewCollector(group, name, deviceTitleOrName(dev))
+			if err != nil {
+				return err
+			}
+			site.collectors[group+"/"+name] = c
+		}
+	}
+
+	for name := range loadForecastParts(site.GetTariff(api.TariffUsageLoad)) {
+		if _, ok := site.collectors[metrics.ConsumerForecast+"/"+name]; !ok {
+			site.log.WARN.Printf("load forecast part %s: no aux or consumer meter of that name", name)
+		}
 	}
 
 	// curtailment devices

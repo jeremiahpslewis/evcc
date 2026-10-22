@@ -25,3 +25,15 @@ forecast: # consumption without charging and heating controlled by evcc, mean po
 #  entity: sensor.house_consumption_forecast
 #  attribute: forecast
 #  jq: map({ start, end, value: .power }) | tostring
+
+## Parts of the forecast measured by an aux or consumer meter of their own, such as a
+## heat pump whose runs are planned, are scored by energy rather than timing in the
+## Energy view (optional, keyed by meter name, same format as the forecast)
+
+#parts:
+#  heatpump:
+#    source: homeassistant
+#    uri: http://homeassistant.local:8123
+#    entity: sensor.heat_pump_forecast
+#    attribute: forecast
+#    jq: map({ start, end, value: .power }) | tostring

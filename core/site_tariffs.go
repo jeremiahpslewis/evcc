@@ -170,41 +170,70 @@ func (site *Site) publishTariffs(greenShareHome float64, greenShareLoadpoints fl
 func (site *Site) persistHomeForecasts() {
 	now := time.Now()
 
+	// mean power in W to the slot's energy in kWh
+	slotEnergy := func(power float64) float64 {
+		return max(0, power) * tariff.SlotDuration.Hours() / 1e3
+	}
+
 	forecast := site.GetTariff(api.TariffUsageLoad)
 	if r, err := tariff.At(forecast, now); err == nil {
-		// mean power in W to the slot's energy in kWh
-		site.setSlotEnergy(metrics.HomeForecast, max(0, r.Value)*tariff.SlotDuration.Hours()/1e3)
+		site.setSlotEnergy(metrics.HomeForecast, slotEnergy(r.Value))
+	}
+
+	parts := loadForecastParts(forecast)
+	for name, rates := range parts {
+		if r, err := rates.At(now); err == nil {
+			site.setSlotEnergy(metrics.ConsumerForecast+"/"+name, slotEnergy(r.Value))
+		}
 	}
 
 	if forecast == nil && !optimizerEnabled() {
 		return
 	}
 
-	if v, ok := site.slotProfile(now); ok {
+	if v, ok := site.slotProfile(metrics.Home, now); ok {
 		site.setSlotEnergy(metrics.HomeProfile, v)
+	}
+
+	for name := range parts {
+		if v, ok := site.slotProfile(name, now); ok {
+			site.setSlotEnergy(metrics.ConsumerProfile+"/"+name, v)
+		}
 	}
 }
 
-// slotProfile returns the default profile's energy in kWh for the slot covering now,
+// loadForecastParts returns the rates of the metered parts of a load forecast by meter name
+func loadForecastParts(forecast api.Tariff) map[string]api.Rates {
+	if p, ok := forecast.(interface{ Parts() map[string]api.Rates }); ok {
+		return p.Parts()
+	}
+	return nil
+}
+
+// slotProfile returns a collector's default profile energy in kWh for the slot covering ts,
 // queried once per slot
-func (site *Site) slotProfile(now time.Time) (float64, bool) {
-	if _, ok := site.collectors[metrics.Home]; !ok {
+func (site *Site) slotProfile(ref string, ts time.Time) (float64, bool) {
+	if _, ok := site.collectors[ref]; !ok {
 		return 0, false
 	}
 
-	if slot := now.Truncate(tariff.SlotDuration); !slot.Equal(site.profileSlot) {
+	if slot := ts.Truncate(tariff.SlotDuration); !slot.Equal(site.profileSlot) {
 		site.profileSlot = slot
-		site.profileEnergy = nil
-
-		if p, err := site.homeProfile(1); err == nil && len(p) > 0 {
-			site.profileEnergy = new(p[0] / 1e3) // Wh to kWh
-		}
+		site.profileEnergy = make(map[string]*float64)
 	}
 
-	if site.profileEnergy == nil {
+	v, ok := site.profileEnergy[ref]
+	if !ok {
+		if p, err := site.meterProfile(ref, 1); err == nil && len(p) > 0 {
+			v = &p[0]
+		}
+		site.profileEnergy[ref] = v
+	}
+
+	if v == nil {
 		return 0, false
 	}
-	return *site.profileEnergy, true
+	return *v, true
 }
 
 // setSlotEnergy sets the energy of the current slot of a collector fed by a prediction
