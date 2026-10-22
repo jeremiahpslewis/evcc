@@ -181,3 +181,66 @@ func TestPersistHomeForecasts(t *testing.T) {
 	require.Len(t, res[0].Data, 1)
 	assert.InDelta(t, 0.5, res[0].Data[0].Energy, 1e-9, "2kW over a quarter hour")
 }
+
+// partsTariff is a load forecast with metered parts
+type partsTariff struct {
+	api.Tariff
+	parts map[string]api.Rates
+}
+
+func (t partsTariff) Parts() map[string]api.Rates {
+	return t.parts
+}
+
+func TestPersistLoadForecastParts(t *testing.T) {
+	require.NoError(t, db.NewInstance("sqlite", ":memory:"))
+	require.NoError(t, metrics.SetupSchema())
+
+	// a full day of heat pump history, 0.2kWh per slot
+	past := clock.NewMock()
+	past.Set(time.Now().AddDate(0, 0, -1).Truncate(24 * time.Hour))
+	meter, err := metrics.NewCollector(metrics.Consumer, "heatpump", "Heat Pump", metrics.WithClock(past))
+	require.NoError(t, err)
+	for range 97 {
+		require.NoError(t, meter.SetEnergy(0.2))
+		past.Add(tariff.SlotDuration)
+	}
+
+	clk := clock.NewMock()
+	clk.Set(time.Now().Truncate(tariff.SlotDuration))
+
+	collectors := map[string]*metrics.Collector{"heatpump": meter}
+	for _, group := range []string{metrics.ConsumerForecast, metrics.ConsumerProfile} {
+		c, err := metrics.NewCollector(group, "heatpump", "Heat Pump", metrics.WithClock(clk))
+		require.NoError(t, err)
+		collectors[group+"/heatpump"] = c
+	}
+
+	ctrl := gomock.NewController(t)
+	household := api.NewMockTariff(ctrl)
+	household.EXPECT().Rates().Return(nil, nil).AnyTimes()
+
+	around := api.Rates{{Start: time.Now().Add(-time.Hour), End: time.Now().Add(time.Hour), Value: 900}}
+	site := &Site{
+		log:        util.NewLogger("test"),
+		tariffs:    &tariff.Tariffs{Load: partsTariff{household, map[string]api.Rates{"heatpump": around}}},
+		collectors: collectors,
+	}
+
+	slot := clk.Now()
+	site.persistHomeForecasts()
+	clk.Add(tariff.SlotDuration)
+	site.persistHomeForecasts() // completes the first slot
+
+	for group, energy := range map[string]float64{
+		metrics.ConsumerForecast: 0.225, // 900W over a quarter hour
+		metrics.ConsumerProfile:  0.2,   // the meter's default profile
+	} {
+		res, err := metrics.QueryEnergy(slot, slot.Add(tariff.SlotDuration), "15m", false, metrics.EnergyFilter{Group: group})
+		require.NoError(t, err)
+		require.Len(t, res, 1, group)
+		require.Len(t, res[0].Data, 1, group)
+		assert.Equal(t, "Heat Pump", res[0].Title, group)
+		assert.InDelta(t, energy, res[0].Data[0].Energy, 1e-9, group)
+	}
+}

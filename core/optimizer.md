@@ -32,6 +32,8 @@ A load forecast (`tariffs.load`, a custom tariff with `tariff: load`) replaces t
 
 Both predictions are recorded per slot, the forecast whenever one is configured, the profile while the optimizer is enabled or a forecast replaces it (metrics groups `homeforecast` and `homeprofile`).
 
+A custom load forecast may name `parts`, forecasts of loads it contains that have an aux or consumer meter of their own, keyed by the meter's name, such as a heat pump whose runs are planned after the forecast is made. The optimizer still uses the forecast itself. Each part's forecast and its meter's default profile are recorded per slot (`consumerforecast` and `consumerprofile`, titled like the meter), so that a part can be compared with its meter by energy rather than by timing it does not predict.
+
 ### Measured value blending
 
 The solar forecast and the base load profile are anchored to the current situation
