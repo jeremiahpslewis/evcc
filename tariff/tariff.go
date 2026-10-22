@@ -18,6 +18,7 @@ type Tariff struct {
 	*embed
 	log    *util.Logger
 	data   *util.Monitor[api.Rates]
+	parts  map[string]*util.Monitor[api.Rates] // forecasts of metered parts, by meter name
 	priceG func() (float64, error)
 	typ    api.TariffType
 }
@@ -33,6 +34,8 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]any) (api.T
 		embed    `mapstructure:",squash"`
 		Price    *plugin.Config
 		Forecast *plugin.Config
+		// forecasts of metered parts of the forecast, by meter name
+		Parts    map[string]*plugin.Config
 		Type     api.TariffType `mapstructure:"tariff"`
 		Interval time.Duration
 		Cache    time.Duration
@@ -47,6 +50,10 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]any) (api.T
 
 	if (cc.Price != nil) == (cc.Forecast != nil) {
 		return nil, fmt.Errorf("must have either price or forecast")
+	}
+
+	if len(cc.Parts) > 0 && cc.Forecast == nil {
+		return nil, fmt.Errorf("parts require a forecast")
 	}
 
 	if err := cc.init(); err != nil {
@@ -72,6 +79,7 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]any) (api.T
 		typ:    cc.Type,
 		priceG: priceG,
 		data:   util.NewMonitor[api.Rates](2 * cc.Interval),
+		parts:  make(map[string]*util.Monitor[api.Rates], len(cc.Parts)),
 	}
 
 	if forecastG != nil {
@@ -83,7 +91,52 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]any) (api.T
 		}
 	}
 
+	// a part failing to read leaves the forecast itself usable
+	for name, conf := range cc.Parts {
+		partG, err := conf.StringGetter(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("part %s: %w", name, err)
+		}
+
+		data := util.NewMonitor[api.Rates](2 * cc.Interval)
+		t.parts[name] = data
+		go t.runPart(name, partG, data, cc.Interval)
+	}
+
 	return t, nil
+}
+
+func (t *Tariff) runPart(name string, partG func() (string, error), data *util.Monitor[api.Rates], interval time.Duration) {
+	for tick := time.Tick(interval); ; <-tick {
+		var rates api.Rates
+		if err := backoff.Retry(func() error {
+			s, err := partG()
+			if err != nil {
+				return backoffPermanentError(err)
+			}
+			return backoff.Permanent(json.Unmarshal([]byte(s), &rates))
+		}, bo()); err != nil {
+			t.log.ERROR.Printf("part %s: %v", name, err)
+			continue
+		}
+
+		for i := range rates {
+			rates[i].Start, rates[i].End = rates[i].Start.Local(), rates[i].End.Local()
+		}
+
+		mergeRatesAfter(data, rates, time.Now().Truncate(SlotDuration))
+	}
+}
+
+// Parts returns the current rates of the metered parts of the forecast by meter name,
+// nil for a part without current rates
+func (t *Tariff) Parts() map[string]api.Rates {
+	res := make(map[string]api.Rates, len(t.parts))
+	for name, data := range t.parts {
+		rates, _ := data.Get()
+		res[name] = slices.Clone(rates)
+	}
+	return res
 }
 
 func (t *Tariff) run(forecastG func() (string, error), done chan error, interval time.Duration) {

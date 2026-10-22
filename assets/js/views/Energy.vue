@@ -248,6 +248,17 @@
 									/>
 								</template>
 							</StatCards>
+							<p
+								v-if="loadPartTitles.length"
+								class="small text-muted mt-3 mb-0"
+								data-testid="energy-consumption-parts"
+							>
+								{{
+									$t("energy.consumption.energyOnly", {
+										parts: loadPartTitles.join(", "),
+									})
+								}}
+							</p>
 						</div>
 					</div>
 				</div>
@@ -470,7 +481,7 @@ import Stat from "../components/Energy/Stat.vue";
 import MixBar from "../components/Energy/MixBar.vue";
 import GridStats from "../components/Energy/GridStats.vue";
 import ForecastDeviation from "../components/Energy/ForecastDeviation.vue";
-import { pairBuckets, predictionAccuracy } from "../components/Energy/accuracy";
+import { pairBuckets, splitAccuracy } from "../components/Energy/accuracy";
 import CostStats from "../components/Energy/CostStats.vue";
 import ConsumerTreemap from "../components/Energy/ConsumerTreemap.vue";
 import EntityDetail from "../components/Energy/EntityDetail.vue";
@@ -509,7 +520,13 @@ import store from "../store";
 const ENERGY_PERIODS = [PERIODS.DAY, PERIODS.MONTH, PERIODS.YEAR];
 const OVERVIEW_HEIGHT = 300;
 // predictions recorded alongside the meters, no energy that flowed
-const PREDICTION_GROUPS = ["forecast", "homeforecast", "homeprofile"];
+const PREDICTION_GROUPS = [
+	"forecast",
+	"homeforecast",
+	"homeprofile",
+	"consumerforecast",
+	"consumerprofile",
+];
 
 function daysInMonth(year: number, month: number) {
 	return new Date(year, month, 0).getDate();
@@ -956,17 +973,24 @@ export default defineComponent({
 		homeProfileDeviation(): ([number, number] | null)[] | null {
 			return this.homeProfileSeries.length ? this.deviation("homeprofile", "home") : null;
 		},
+		// metered parts of the consumption forecast, by the title they share with their meter
+		loadPartTitles(): string[] {
+			const meters = new Set(this.withData("consumer").map((s) => s.title));
+			return this.withData("consumerforecast")
+				.map((s) => s.title)
+				.filter((title) => meters.has(title));
+		},
 		consumptionStats(): StatItem[] {
 			return [
 				this.accuracyStat(
 					"homeForecast",
 					this.$t("energy.consumption.accuracy"),
-					this.homeForecastDeviation
+					this.consumptionAccuracy(this.homeForecastDeviation, "consumerforecast")
 				),
 				this.accuracyStat(
 					"homeProfile",
 					this.$t("energy.consumption.defaultAccuracy"),
-					this.homeProfileDeviation
+					this.consumptionAccuracy(this.homeProfileDeviation, "consumerprofile")
 				),
 			].filter((s): s is StatItem => s !== null);
 		},
@@ -1428,21 +1452,49 @@ export default defineComponent({
 				this.recordedBuckets(actual)
 			);
 		},
-		// buckets a group has recorded data in
-		recordedBuckets(group: string): Set<number> {
+		// buckets a group, or one of its entities, has recorded data in
+		recordedBuckets(group: string, title?: string): Set<number> {
 			return new Set(
 				this.series
-					.filter((s) => s.group === group)
+					.filter((s) => s.group === group && (title === undefined || s.title === title))
 					.flatMap((s) => s.data.map((slot) => this.bucketIndex(slot.start)))
 			);
+		},
+		// energy per bucket of one entity of a group
+		entityBuckets(group: string, title: string): number[] {
+			const out = Array.from({ length: this.bucketCount }, () => 0);
+			for (const s of this.series.filter((s) => s.group === group && s.title === title)) {
+				for (const slot of s.data) {
+					const i = this.bucketIndex(slot.start);
+					out[i] = (out[i] || 0) + slot.energy;
+				}
+			}
+			return out;
+		},
+		// accuracy of a consumption prediction: its metered parts are scored by their energy
+		// per day, their timing is planned rather than predicted
+		consumptionAccuracy(
+			spans: ([number, number] | null)[] | null,
+			partGroup: string
+		): { accuracy: number; delta: number } | null {
+			if (!spans) return null;
+			const parts = this.loadPartTitles.map((title) =>
+				pairBuckets(
+					this.entityBuckets(partGroup, title),
+					this.entityBuckets("consumer", title),
+					this.recordedBuckets(partGroup, title),
+					this.recordedBuckets("consumer", title)
+				)
+			);
+			// the day view's buckets are quarter hours of one day, the others days or months
+			return splitAccuracy(spans, parts, (i) => (this.isDay ? 0 : i));
 		},
 		// accuracy and how far the prediction sat above or below what was consumed
 		accuracyStat(
 			key: string,
 			label: string,
-			spans: ([number, number] | null)[] | null
+			res: { accuracy: number; delta: number } | null
 		): StatItem | null {
-			const res = predictionAccuracy(spans || []);
 			if (!res) return null;
 			return {
 				key,

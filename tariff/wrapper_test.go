@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/evcc-io/evcc/api"
+	"github.com/evcc-io/evcc/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -84,4 +85,16 @@ func TestWrapperRetry(t *testing.T) {
 	_, err = res.Rates()
 	require.ErrorIs(t, err, api.ErrOutdated)
 	assert.Same(t, retryable, w.tariff)
+}
+
+func TestWrapperParts(t *testing.T) {
+	// not yet created
+	w := &Wrapper{retriedAt: time.Now()}
+	assert.Nil(t, w.Parts())
+
+	// created custom tariff with a part
+	data := util.NewMonitor[api.Rates](time.Hour)
+	data.Set(api.Rates{{Value: 900}})
+	w.tariff = &Tariff{parts: map[string]*util.Monitor[api.Rates]{"heatpump": data}}
+	assert.Equal(t, map[string]api.Rates{"heatpump": {{Value: 900}}}, w.Parts())
 }
