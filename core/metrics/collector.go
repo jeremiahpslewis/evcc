@@ -23,6 +23,12 @@ const (
 	Consumer     = "consumer" // consumer meter (consumers list or aux)
 )
 
+// predictions of a metered part of the consumption, compared to its meter
+const (
+	ConsumerForecast = "consumerforecast"
+	ConsumerProfile  = "consumerprofile"
+)
+
 type Collector struct {
 	entity     entity
 	accu       *Accumulator

@@ -45,7 +45,7 @@ type SeriesExport []Series
 
 // GroupOrder is the canonical display order of metric groups, mirroring the
 // frontend GROUP_ORDER plus home/forecast.
-var GroupOrder = []string{PV, Battery, Grid, Loadpoint, Consumer, Meter, Home, Forecast, HomeForecast, HomeProfile, Temperature}
+var GroupOrder = []string{PV, Battery, Grid, Loadpoint, Consumer, Meter, Home, Forecast, HomeForecast, HomeProfile, ConsumerForecast, ConsumerProfile, Temperature}
 
 var aggregateFormats = map[string]string{
 	"15m":   "%Y-%m-%d %H:%M",

@@ -17,15 +17,22 @@ import (
 // homeProfile returns the predicted home base load in Wh for minLen 15min slots
 // starting now.
 func (site *Site) homeProfile(minLen int) ([]float64, error) {
-	col := site.collectors[metrics.Home]
-
-	base, err := col.EnergyProfile(now.BeginningOfDay().AddDate(0, 0, -28))
+	profile, err := site.meterProfile(metrics.Home, minLen)
 	if err != nil {
 		return nil, err
 	}
 
 	// convert to Wh
-	return lo.Map(tileAndTrim(base[:], minLen), func(v float64, _ int) float64 { return v * 1e3 }), nil
+	return lo.Map(profile, func(v float64, _ int) float64 { return v * 1e3 }), nil
+}
+
+// meterProfile returns a collector's default profile in kWh for minLen 15min slots starting now
+func (site *Site) meterProfile(ref string, minLen int) ([]float64, error) {
+	base, err := site.collectors[ref].EnergyProfile(now.BeginningOfDay().AddDate(0, 0, -28))
+	if err != nil {
+		return nil, err
+	}
+	return tileAndTrim(base[:], minLen), nil
 }
 
 // applyLoadForecast replaces the home profile slots covered by the configured load

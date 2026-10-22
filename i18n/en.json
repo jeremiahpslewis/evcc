@@ -1428,6 +1428,7 @@
       "consumed": "Consumed",
       "default": "Default",
       "defaultAccuracy": "Default accuracy",
+      "energyOnly": "Scored by energy, not by timing: {parts}",
       "title": "Consumption forecast"
     },
     "direction": {
