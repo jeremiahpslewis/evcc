@@ -1,16 +1,18 @@
 // how close a prediction came, from per bucket [predicted, actual] pairs (null where no
-// prediction was recorded): the absolute error against the predicted total, so misses in
-// both directions do not cancel out, and how far the predicted total sat above the actual
-// one, negative below. Null without a prediction.
+// prediction was recorded): the absolute error against the actual total, so misses in
+// both directions do not cancel out and a prediction that runs low is not marked down
+// for it beyond its error (against the predicted total, one that ran high would score
+// better for the same error), and how far the predicted total sat above the actual one,
+// negative below. Null without a prediction or without anything consumed.
 export function predictionAccuracy(
   spans: ([number, number] | null)[]
 ): { accuracy: number; delta: number } | null {
   const known = spans.filter((s): s is [number, number] => s !== null);
   const predicted = known.reduce((acc, s) => acc + s[0], 0);
-  if (predicted <= 0) return null;
-  const error = known.reduce((acc, s) => acc + Math.abs(s[0] - s[1]), 0);
   const actual = known.reduce((acc, s) => acc + s[1], 0);
-  return { accuracy: 1 - error / predicted, delta: predicted - actual };
+  if (predicted <= 0 || actual <= 0) return null;
+  const error = known.reduce((acc, s) => acc + Math.abs(s[0] - s[1]), 0);
+  return { accuracy: 1 - error / actual, delta: predicted - actual };
 }
 
 // per bucket [predicted, actual], null where either was not recorded: a bucket the
@@ -30,7 +32,8 @@ export function pairBuckets(
 // are planned rather than when predicted: the rest of the prediction is scored per bucket, each
 // part by its energy per scoring group of buckets (a day). total holds per bucket the predicted
 // and actual consumption, null where either was not recorded; parts the same per part, a bucket
-// without a part's pair keeps that part in the rest. Without parts it scores as predictionAccuracy.
+// without a part's pair keeps that part in the rest. The error is set against the actual total, as
+// in predictionAccuracy, which it scores as without parts.
 export function splitAccuracy(
   total: ([number, number] | null)[],
   parts: ([number, number] | null)[][],
@@ -60,7 +63,7 @@ export function splitAccuracy(
     error += Math.abs(restPredicted - restActual);
   });
 
-  if (predicted <= 0) return null;
+  if (predicted <= 0 || actual <= 0) return null;
   partSums.forEach(([p, a]) => (error += Math.abs(p - a)));
-  return { accuracy: 1 - error / predicted, delta: predicted - actual };
+  return { accuracy: 1 - error / actual, delta: predicted - actual };
 }
