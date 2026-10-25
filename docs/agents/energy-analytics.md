@@ -88,6 +88,8 @@ Buckets that have no persisted forecast slot (restart gaps, forecast provider ou
 
 The forecast source changed over time in real installations. Comparing accuracy across periods with different providers is not supported, and there is no "valid since" marker for forecast quality.
 
+The consumption card scores the household's predictions (a custom load forecast and the default profile it replaces) the same way per bucket, with one difference: the summed error is set against what was consumed, not against the prediction: 1 - Σ error / Σ consumed. Against the prediction's own total, a prediction that ran low would be marked down beyond its error and one that ran high would score better for the same error, so two predictions of the same period could not be compared by their accuracy. Only buckets where both the prediction and the consumption were recorded count.
+
 ## Missing, partial and implausible data
 
 Principles:
