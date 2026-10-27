@@ -629,10 +629,6 @@ func (site *Site) optimizerRequest(battery []types.Measurement) (optimizer.Optim
 		},
 	}
 
-	// end of horizon Wh value, floored at the export price: charging surplus only
-	// stores eta Wh per Wh, so below pE/eta exporting beats storing
-	pa := max(lo.Min(req.TimeSeries.PN)*eta*0.99, lo.Min(req.TimeSeries.PE)/eta*1.01)
-
 	// individual profiles summarized into Gt, for the debug view
 	details = requestDetails{
 		Timestamps: asTimestamps(dt, now),
@@ -719,7 +715,7 @@ func (site *Site) optimizerRequest(battery []types.Measurement) (optimizer.Optim
 	}
 
 	for _, b := range batteries {
-		b.cfg.PA = pa
+		b.cfg.PA = endOfHorizonValue(req.TimeSeries, cmp.Or(b.cfg.EtaC, req.EtaC), cmp.Or(b.cfg.EtaD, req.EtaD))
 		req.Batteries = append(req.Batteries, b.cfg)
 		details.BatteryDetails = append(details.BatteryDetails, b.detail)
 	}
@@ -1259,6 +1255,13 @@ func (site *Site) batteryRequest(dev config.Device[api.Meter], b types.Measureme
 	}
 
 	return bat, detail
+}
+
+// endOfHorizonValue is the value of a stored Wh at the end of the horizon: the import it
+// replaces after discharge losses, floored at the export price since charging surplus only
+// stores etaC Wh per Wh, so below pE/etaC exporting beats storing
+func endOfHorizonValue(ts optimizer.TimeSeries, etaC, etaD float32) float32 {
+	return max(lo.Min(ts.PN)*etaD*0.99, lo.Min(ts.PE)/etaC*1.01)
 }
 
 // matchSoc returns the end of the first slot whose soc satisfies fun.

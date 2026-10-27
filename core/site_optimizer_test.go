@@ -1106,3 +1106,17 @@ func TestBatteryEfficiency(t *testing.T) {
 	assert.Equal(t, float32(0.95), bat.EtaC)
 	assert.Equal(t, float32(0.95), bat.EtaD)
 }
+
+func TestEndOfHorizonValue(t *testing.T) {
+	ts := optimizer.TimeSeries{PN: []float32{0.30, 0.25}, PE: []float32{0.08, 0.08}}
+
+	// the request default is the former single value
+	assert.InDelta(t, max(0.25*eta*0.99, 0.08/eta*1.01), endOfHorizonValue(ts, eta, eta), 1e-6)
+
+	// a more efficient battery replaces more import per stored Wh
+	assert.InDelta(t, 0.25*0.95*0.99, endOfHorizonValue(ts, 0.95, 0.95), 1e-6)
+
+	// at a high export price storing surplus only pays above the export price per stored Wh
+	ts.PE = []float32{0.24, 0.24}
+	assert.InDelta(t, 0.24/0.95*1.01, endOfHorizonValue(ts, 0.95, 0.95), 1e-6)
+}
