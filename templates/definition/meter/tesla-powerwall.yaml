@@ -26,9 +26,11 @@ params:
     deprecated: true
   - name: maxdischargepower
     deprecated: true
+  - name: efficiency
 render: |
   type: powerwall
   uri: {{ .host }}
   usage: {{ .usage }}
   user: customer
   password: {{ .password }} # for user 'customer'
+  efficiency: {{ .efficiency }}

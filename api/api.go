@@ -59,6 +59,11 @@ type BatterySocLimiter interface {
 	GetSocLimits() (min, max float64, err error)
 }
 
+// BatteryEfficiency provides the battery charge/discharge efficiency in %
+type BatteryEfficiency interface {
+	Efficiency() (int64, error)
+}
+
 // MaxACPowerGetter provides max AC power in W
 type MaxACPowerGetter interface {
 	MaxACPower() float64

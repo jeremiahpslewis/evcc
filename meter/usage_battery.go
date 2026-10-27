@@ -118,6 +118,20 @@ func floatPair(a, b func() (float64, error)) func() (float64, float64, error) {
 	}
 }
 
+type batteryEfficiency struct {
+	Efficiency int64 // %
+}
+
+// Decorator returns an api.BatteryEfficiency decorator, nil without an efficiency in 1..100 %
+func (m *batteryEfficiency) Decorator() func() (int64, error) {
+	if m.Efficiency <= 0 || m.Efficiency > 100 {
+		return nil
+	}
+	return func() (int64, error) {
+		return m.Efficiency, nil
+	}
+}
+
 type batteryPowerLimits struct {
 	MaxChargePower    float64
 	MaxDischargePower float64

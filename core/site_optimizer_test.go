@@ -1083,3 +1083,26 @@ func TestCircuitMaxImport(t *testing.T) {
 		assert.Equal(t, tc.expected, circuitMaxImport(c), "power %.0f current %.0f", tc.power, tc.current)
 	}
 }
+
+type effMeter struct {
+	api.Meter
+}
+
+func (m effMeter) Efficiency() (int64, error) {
+	return 95, nil
+}
+
+func TestBatteryEfficiency(t *testing.T) {
+	site := &Site{}
+	capacity, soc := 10.0, 50.0
+	b := types.Measurement{Capacity: &capacity, Soc: &soc}
+
+	// unconfigured battery leaves the request default
+	bat, _ := site.batteryRequest(config.NewStaticDevice[api.Meter](config.Named{}, nil), b, nil, 1, time.Hour)
+	assert.Zero(t, bat.EtaC)
+	assert.Zero(t, bat.EtaD)
+
+	bat, _ = site.batteryRequest(config.NewStaticDevice[api.Meter](config.Named{}, effMeter{}), b, nil, 1, time.Hour)
+	assert.Equal(t, float32(0.95), bat.EtaC)
+	assert.Equal(t, float32(0.95), bat.EtaD)
+}
