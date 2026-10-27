@@ -36,6 +36,7 @@ func NewLgEss15FromConfig(other map[string]any) (api.Meter, error) {
 func NewLgEssFromConfig(other map[string]any, essType lgpcs.Model) (api.Meter, error) {
 	cc := struct {
 		batteryCapacity        `mapstructure:",squash"`
+		batteryEfficiency      `mapstructure:",squash"`
 		batterySocLimits       `mapstructure:",squash"`
 		batteryPowerLimits     `mapstructure:",squash"`
 		URI, Usage             string
@@ -57,11 +58,11 @@ func NewLgEssFromConfig(other map[string]any, essType lgpcs.Model) (api.Meter, e
 		return nil, errors.New("missing usage")
 	}
 
-	return NewLgEss(cc.URI, cc.Usage, cc.Registration, cc.Password, cc.Cache, cc.batteryCapacity, cc.batterySocLimits, cc.batteryPowerLimits, essType)
+	return NewLgEss(cc.URI, cc.Usage, cc.Registration, cc.Password, cc.Cache, cc.batteryCapacity, cc.batteryEfficiency, cc.batterySocLimits, cc.batteryPowerLimits, essType)
 }
 
 // NewLgEss creates an LgEss Meter
-func NewLgEss(uri, usage, registration, password string, cache time.Duration, batteryCapacity batteryCapacity, batterySocLimits batterySocLimits, batteryPowerLimits batteryPowerLimits, essType lgpcs.Model) (api.Meter, error) {
+func NewLgEss(uri, usage, registration, password string, cache time.Duration, batteryCapacity batteryCapacity, batteryEfficiency batteryEfficiency, batterySocLimits batterySocLimits, batteryPowerLimits batteryPowerLimits, essType lgpcs.Model) (api.Meter, error) {
 	conn, err := lgpcs.GetInstance(uri, registration, password, cache, essType)
 	if err != nil {
 		return nil, err
@@ -75,6 +76,7 @@ func NewLgEss(uri, usage, registration, password string, cache time.Duration, ba
 
 	implement.May(m, implement.BatteryCapacity(batteryCapacity.Decorator()))
 	implement.May(m, implement.BatteryPowerLimiter(batteryPowerLimits.Decorator()))
+	implement.May(m, implement.BatteryEfficiency(batteryEfficiency.Decorator()))
 
 	if m.usage == "grid" && essType != lgpcs.LgEss15 {
 		implement.Has(m, implement.MeterEnergy(m.totalEnergy))

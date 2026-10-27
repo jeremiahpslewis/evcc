@@ -35,6 +35,7 @@ func NewHomeAssistantFromConfig(ctx context.Context, other map[string]any) (api.
 
 		// battery
 		batteryCapacity     `mapstructure:",squash"`
+		batteryEfficiency   `mapstructure:",squash"`
 		batterySocLimitsCtx `mapstructure:",squash"`
 		batteryPowerLimits  `mapstructure:",squash"`
 
@@ -98,6 +99,7 @@ func NewHomeAssistantFromConfig(ctx context.Context, other map[string]any) (api.
 		implement.May(m, implement.BatteryCapacity(cc.batteryCapacity.Decorator()))
 		implement.May(m, implement.BatterySocLimiter(socLimiter))
 		implement.May(m, implement.BatteryPowerLimiter(cc.batteryPowerLimits.Decorator()))
+		implement.May(m, implement.BatteryEfficiency(cc.batteryEfficiency.Decorator()))
 
 		modes := map[api.BatteryMode]string{
 			api.BatteryNormal:     cc.ModeNormal,

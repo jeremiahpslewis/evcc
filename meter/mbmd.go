@@ -30,6 +30,7 @@ func NewMbmdFromConfig(ctx context.Context, other map[string]any) (api.Meter, er
 	cc := struct {
 		Model              string
 		batteryCapacity    `mapstructure:",squash"`
+		batteryEfficiency  `mapstructure:",squash"`
 		batteryPowerLimits `mapstructure:",squash"`
 		batterySocLimits   `mapstructure:",squash"`
 		modbus.Settings    `mapstructure:",squash"`
@@ -115,6 +116,7 @@ func NewMbmdFromConfig(ctx context.Context, other map[string]any) (api.Meter, er
 		implement.May(m, implement.BatteryCapacity(cc.batteryCapacity.Decorator()))
 		implement.May(m, implement.BatterySocLimiter(cc.batterySocLimits.Decorator()))
 		implement.May(m, implement.BatteryPowerLimiter(cc.batteryPowerLimits.Decorator()))
+		implement.May(m, implement.BatteryEfficiency(cc.batteryEfficiency.Decorator()))
 
 		return m, nil
 	}

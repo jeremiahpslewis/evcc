@@ -41,6 +41,7 @@ func init() {
 func NewEcoFlowFromConfig(other map[string]any) (api.Meter, error) {
 	cc := struct {
 		batteryCapacity                      `mapstructure:",squash"`
+		batteryEfficiency                    `mapstructure:",squash"`
 		batteryPowerLimits                   `mapstructure:",squash"`
 		batterySocLimits                     `mapstructure:",squash"`
 		Usage                                string
@@ -86,12 +87,12 @@ func NewEcoFlowFromConfig(other map[string]any) (api.Meter, error) {
 		}
 	}
 
-	return NewEcoFlow(cc.AccessKey, cc.SecretKey, serials, cc.Usage, uri, cc.Power, cc.Soc, cc.Cache, cc.batteryCapacity.Decorator(), cc.batterySocLimits, cc.batteryPowerLimits.Decorator())
+	return NewEcoFlow(cc.AccessKey, cc.SecretKey, serials, cc.Usage, uri, cc.Power, cc.Soc, cc.Cache, cc.batteryCapacity.Decorator(), cc.batteryEfficiency.Decorator(), cc.batterySocLimits, cc.batteryPowerLimits.Decorator())
 }
 
 // NewEcoFlow constructs the EcoFlow struct
 func NewEcoFlow(accessKey, secretKey string, serials []string, usage, uri string,
-	power, soc string, cache time.Duration, capacity func() (float64, error), batterySocLimits batterySocLimits, batteryPowerLimits func() (float64, float64, error)) (*EcoFlow, error) {
+	power, soc string, cache time.Duration, capacity func() (float64, error), efficiency func() (int64, error), batterySocLimits batterySocLimits, batteryPowerLimits func() (float64, float64, error)) (*EcoFlow, error) {
 	if len(serials) == 0 {
 		return nil, errors.New("missing serial")
 	}
@@ -119,6 +120,7 @@ func NewEcoFlow(accessKey, secretKey string, serials []string, usage, uri string
 		implement.May(m, implement.BatteryCapacity(capacity))
 		implement.May(m, implement.BatterySocLimiter(batterySocLimits.Decorator()))
 		implement.May(m, implement.BatteryPowerLimiter(batteryPowerLimits))
+		implement.May(m, implement.BatteryEfficiency(efficiency))
 
 		// the backup reserve command is Stream-specific, the PowerOcean template shares this meter type
 		if soc == "cmsBattSoc" {

@@ -31,6 +31,8 @@ type powerWallConfig struct {
 	MaxSoc_                    any     `mapstructure:"maxsoc"`            // TODO deprecated
 	MaxChargePower_            any     `mapstructure:"maxchargepower"`    // TODO deprecated
 	MaxDischargePower_         any     `mapstructure:"maxdischargepower"` // TODO deprecated
+
+	batteryEfficiency `mapstructure:",squash"`
 }
 
 func defaultPowerWallConfig() powerWallConfig {
@@ -118,6 +120,7 @@ func newPowerWall(log *util.Logger, cc powerWallConfig) (*PowerWall, error) {
 		}
 
 		implement.Has(m, implement.Battery(m.batterySoc))
+		implement.May(m, implement.BatteryEfficiency(cc.batteryEfficiency.Decorator()))
 
 		implement.Has(m, implement.BatteryCapacity(func() (float64, error) {
 			return status.NominalFullPackEnergy / 1e3, nil
