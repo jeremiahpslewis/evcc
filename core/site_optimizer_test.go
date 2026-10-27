@@ -801,7 +801,7 @@ func TestEndOfHorizonValue(t *testing.T) {
 		{"vehicle, export above import", 0.3, 0.33, false, 0.3 * eta * 0.99},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := endOfHorizonValue([]float32{tc.pN, 2 * tc.pN}, []float32{tc.pE, 2 * tc.pE}, eta, tc.canExport)
+			got := endOfHorizonValue([]float32{tc.pN, 2 * tc.pN}, []float32{tc.pE, 2 * tc.pE}, eta, eta, tc.canExport)
 			assert.InDelta(t, tc.want, got, 1e-6)
 		})
 	}
@@ -1272,4 +1272,15 @@ func TestBatteryEfficiency(t *testing.T) {
 	bat, _ = site.batteryRequest(config.NewStaticDevice[api.Meter](config.Named{}, effMeter{}), b, nil, 1, time.Hour)
 	assert.Equal(t, float32(0.95), bat.EtaC)
 	assert.Equal(t, float32(0.95), bat.EtaD)
+}
+
+func TestEndOfHorizonValueBatteryEfficiency(t *testing.T) {
+	pN, pE := []float32{0.30, 0.25}, []float32{0.08, 0.08}
+
+	// a more efficient battery replaces more import per stored Wh
+	assert.InDelta(t, 0.25*0.95*0.99, endOfHorizonValue(pN, pE, 0.95, 0.95, true), 1e-6)
+
+	// at a high export price storing surplus only pays above the export price per stored Wh
+	pE = []float32{0.24, 0.24}
+	assert.InDelta(t, 0.24/0.95*1.01, endOfHorizonValue(pN, pE, 0.95, 0.95, true), 1e-6)
 }

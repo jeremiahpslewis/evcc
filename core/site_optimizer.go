@@ -453,12 +453,13 @@ type demandDetail struct {
 	Values []float32  `json:"values"`
 }
 
-// endOfHorizonValue is the Wh value of energy left in storage at the end of the horizon, floored
-// at pE/eta for storage that can export: charging surplus only stores eta Wh per Wh
-func endOfHorizonValue(pN, pE []float32, eta float32, canExport bool) float32 {
-	pa := lo.Min(pN) * eta * 0.99
+// endOfHorizonValue is the Wh value of energy left in storage at the end of the horizon: the
+// import it replaces after discharge losses, floored at pE/etaC for storage that can export,
+// since charging surplus only stores etaC Wh per Wh
+func endOfHorizonValue(pN, pE []float32, etaC, etaD float32, canExport bool) float32 {
+	pa := lo.Min(pN) * etaD * 0.99
 	if canExport {
-		pa = max(pa, lo.Min(pE)/eta*1.01)
+		pa = max(pa, lo.Min(pE)/etaC*1.01)
 	}
 	return pa
 }
@@ -738,8 +739,9 @@ func (site *Site) optimizerRequest(battery []types.Measurement) (optimizer.Optim
 	}
 
 	for _, b := range batteries {
-		// vehicles cannot export
-		b.cfg.PA = endOfHorizonValue(req.TimeSeries.PN, req.TimeSeries.PE, eta, b.detail.loadpoint == nil)
+		// a battery without its own efficiency takes the request default, vehicles cannot export
+		b.cfg.PA = endOfHorizonValue(req.TimeSeries.PN, req.TimeSeries.PE,
+			cmp.Or(b.cfg.EtaC, req.EtaC), cmp.Or(b.cfg.EtaD, req.EtaD), b.detail.loadpoint == nil)
 		req.Batteries = append(req.Batteries, b.cfg)
 		details.BatteryDetails = append(details.BatteryDetails, b.detail)
 	}
