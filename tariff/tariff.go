@@ -3,6 +3,7 @@ package tariff
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -18,9 +19,13 @@ type Tariff struct {
 	*embed
 	log    *util.Logger
 	data   *util.Monitor[api.Rates]
+	issue  string                              // generatedAt of the forecast read last, guarded by data
 	parts  map[string]*util.Monitor[api.Rates] // forecasts of metered parts, by meter name
 	priceG func() (float64, error)
 	typ    api.TariffType
+
+	forecastG    func() (string, error)
+	generatedAtG func() (string, error) // when the forecast was issued, changes with every issue
 }
 
 var _ api.Tariff = (*Tariff)(nil)
@@ -34,6 +39,8 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]any) (api.T
 		embed    `mapstructure:",squash"`
 		Price    *plugin.Config
 		Forecast *plugin.Config
+		// when the forecast was issued, read with it
+		GeneratedAt *plugin.Config
 		// forecasts of metered parts of the forecast, by meter name
 		Parts    map[string]*plugin.Config
 		Type     api.TariffType `mapstructure:"tariff"`
@@ -56,6 +63,10 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]any) (api.T
 		return nil, fmt.Errorf("parts require a forecast")
 	}
 
+	if cc.GeneratedAt != nil && cc.Forecast == nil {
+		return nil, fmt.Errorf("generatedAt requires a forecast")
+	}
+
 	if err := cc.init(); err != nil {
 		return nil, err
 	}
@@ -73,18 +84,25 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]any) (api.T
 		return nil, fmt.Errorf("forecast: %w", err)
 	}
 
+	generatedAtG, err := cc.GeneratedAt.StringGetter(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("generatedAt: %w", err)
+	}
+
 	t := &Tariff{
-		log:    util.NewLogger("tariff"),
-		embed:  &cc.embed,
-		typ:    cc.Type,
-		priceG: priceG,
-		data:   util.NewMonitor[api.Rates](2 * cc.Interval),
-		parts:  make(map[string]*util.Monitor[api.Rates], len(cc.Parts)),
+		log:          util.NewLogger("tariff"),
+		embed:        &cc.embed,
+		typ:          cc.Type,
+		priceG:       priceG,
+		data:         util.NewMonitor[api.Rates](2 * cc.Interval),
+		parts:        make(map[string]*util.Monitor[api.Rates], len(cc.Parts)),
+		forecastG:    forecastG,
+		generatedAtG: generatedAtG,
 	}
 
 	if forecastG != nil {
 		done := make(chan error)
-		go t.run(forecastG, done, cc.Interval)
+		go t.run(done, cc.Interval)
 
 		if err := <-done; err != nil {
 			return nil, err
@@ -139,27 +157,17 @@ func (t *Tariff) Parts() map[string]api.Rates {
 	return res
 }
 
-func (t *Tariff) run(forecastG func() (string, error), done chan error, interval time.Duration) {
+func (t *Tariff) run(done chan error, interval time.Duration) {
 	var once sync.Once
 
 	for tick := time.Tick(interval); ; <-tick {
-		var data api.Rates
-		if err := backoff.Retry(func() error {
-			s, err := forecastG()
-			if err != nil {
-				return backoffPermanentError(err)
-			}
-			if err := json.Unmarshal([]byte(s), &data); err != nil {
-				return backoff.Permanent(err)
-			}
-			for i, r := range data {
-				data[i] = api.Rate{
-					Value: t.totalPrice(r.Value, r.Start),
-					Start: r.Start.Local(),
-					End:   r.End.Local(),
-				}
-			}
-			return nil
+		var (
+			data  api.Rates
+			issue string
+		)
+		if err := backoff.Retry(func() (err error) {
+			data, issue, err = t.fetch()
+			return err
 		}, bo()); err != nil {
 			if reportError(&once, done, err) {
 				return
@@ -169,19 +177,125 @@ func (t *Tariff) run(forecastG func() (string, error), done chan error, interval
 			continue
 		}
 
-		// only prune rates older than current period
-		periodStart := time.Now().Truncate(SlotDuration)
-		if t.typ == api.TariffTypeSolar {
-			periodStart = beginningOfDay()
-		}
-		if t.typ == api.TariffTypeTemperature {
-			// Keep 7 days of historical data (in 15-minute intervals) for temperature correction algorithm
-			periodStart = time.Now().AddDate(0, 0, -7)
-		}
-		mergeRatesAfter(t.data, data, periodStart)
+		t.merge(data, issue)
 
 		once.Do(func() { close(done) })
 	}
+}
+
+// fetch reads the forecast and the generatedAt of its issue around it, again when the
+// forecast was issued anew while being read, so that rates and issue belong together
+func (t *Tariff) fetch() (api.Rates, string, error) {
+	for range 3 {
+		before, err := t.readGeneratedAt()
+		if err != nil {
+			return nil, "", err
+		}
+
+		data, err := t.readForecast()
+		if err != nil {
+			return nil, "", err
+		}
+
+		after, err := t.readGeneratedAt()
+		if err != nil {
+			return nil, "", err
+		}
+
+		if before == after {
+			return data, after, nil
+		}
+	}
+
+	return nil, "", errors.New("forecast issued anew while being read")
+}
+
+func (t *Tariff) readForecast() (api.Rates, error) {
+	s, err := t.forecastG()
+	if err != nil {
+		return nil, backoffPermanentError(err)
+	}
+
+	var data api.Rates
+	if err := json.Unmarshal([]byte(s), &data); err != nil {
+		return nil, backoff.Permanent(err)
+	}
+
+	for i, r := range data {
+		data[i] = api.Rate{
+			Value: t.totalPrice(r.Value, r.Start),
+			Start: r.Start.Local(),
+			End:   r.End.Local(),
+		}
+	}
+
+	return data, nil
+}
+
+// readGeneratedAt reads when the forecast was issued, empty without generatedAt
+func (t *Tariff) readGeneratedAt() (string, error) {
+	if t.generatedAtG == nil {
+		return "", nil
+	}
+
+	s, err := t.generatedAtG()
+	if err != nil {
+		return "", backoffPermanentError(fmt.Errorf("generatedAt: %w", err))
+	}
+
+	return s, nil
+}
+
+// merge stores rates of the given issue, keeping older rates up to their start
+func (t *Tariff) merge(data api.Rates, issue string) {
+	// only prune rates older than current period
+	periodStart := time.Now().Truncate(SlotDuration)
+	if t.typ == api.TariffTypeSolar {
+		periodStart = beginningOfDay()
+	}
+	if t.typ == api.TariffTypeTemperature {
+		// Keep 7 days of historical data (in 15-minute intervals) for temperature correction algorithm
+		periodStart = time.Now().AddDate(0, 0, -7)
+	}
+
+	t.data.SetFunc(func(old api.Rates) api.Rates {
+		t.issue = issue
+		return mergeAfter(old, data, periodStart)
+	})
+}
+
+// Refresh reads the forecast now instead of waiting for its interval
+func (t *Tariff) Refresh() error {
+	if t.forecastG == nil {
+		return nil
+	}
+
+	data, issue, err := t.fetch()
+	if err != nil {
+		return err
+	}
+
+	t.merge(data, issue)
+	return nil
+}
+
+// GeneratedAt reads now when the forecast was issued, empty without generatedAt
+func (t *Tariff) GeneratedAt() (string, error) {
+	return t.readGeneratedAt()
+}
+
+// ForecastIssue returns the current rates with the generatedAt of the issue they were
+// read from, empty without generatedAt
+func (t *Tariff) ForecastIssue() (api.Rates, string, error) {
+	var (
+		res   api.Rates
+		issue string
+	)
+	err := t.data.GetFunc(func(val api.Rates) {
+		res = slices.Clone(val)
+		issue = t.issue
+	})
+	return res, issue, err
 }
 
 func (t *Tariff) forecastRates() (api.Rates, error) {
