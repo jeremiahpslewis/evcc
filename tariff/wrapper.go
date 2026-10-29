@@ -90,6 +90,48 @@ func (v *Wrapper) Type() api.TariffType {
 	return 0
 }
 
+// Refresh reads the forecast of a forecast tariff now once created
+func (v *Wrapper) Refresh() error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if t, ok := v.instance().(interface{ Refresh() error }); ok {
+		return t.Refresh()
+	}
+
+	return nil
+}
+
+// GeneratedAt reads when the forecast of a forecast tariff was issued once created, empty otherwise
+func (v *Wrapper) GeneratedAt() (string, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if t, ok := v.instance().(interface{ GeneratedAt() (string, error) }); ok {
+		return t.GeneratedAt()
+	}
+
+	return "", nil
+}
+
+// ForecastIssue returns the rates with the generatedAt of their issue once created
+func (v *Wrapper) ForecastIssue() (api.Rates, string, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	switch t := v.instance().(type) {
+	case nil:
+		return nil, "", fmt.Errorf("tariff not available: %w", v.err)
+	case interface {
+		ForecastIssue() (api.Rates, string, error)
+	}:
+		return t.ForecastIssue()
+	default:
+		rates, err := t.Rates()
+		return rates, "", err
+	}
+}
+
 // Parts returns the metered parts of a forecast tariff once created, nil otherwise
 func (v *Wrapper) Parts() map[string]api.Rates {
 	v.mu.Lock()

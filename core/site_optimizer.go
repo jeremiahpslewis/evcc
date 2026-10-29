@@ -273,6 +273,8 @@ type optimizerState struct {
 	updated time.Time   // last optimizer run, guarded by mu
 	rerun   atomic.Bool // forced trigger arrived during a run, re-run when done
 
+	loadForecastRead atomic.Pointer[string] // generatedAt of the load forecast a solve read last
+
 	// guarded by the site lock
 	suggestions       map[string]types.Suggestion // suggestions by device key
 	suggestionActions map[string]string           // last notified actionable action by device key
