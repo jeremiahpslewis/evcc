@@ -8,6 +8,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -129,8 +130,9 @@ type Site struct {
 	explainMu                sync.Mutex                  // serializes explain requests
 	explained                explainCache                // last explanation, guarded by explainMu
 
-	optimizerMu      sync.Mutex // guards optimizer runs
-	optimizerUpdated time.Time  // last optimizer run, guarded by optimizerMu
+	optimizerMu      sync.Mutex             // guards optimizer runs
+	optimizerUpdated time.Time              // last optimizer run, guarded by optimizerMu
+	loadForecastRead atomic.Pointer[string] // generatedAt of the load forecast a solve read last
 
 	solarScaleCached func() (float64, error) // util.Cached wrapper around querySolarScale
 }
@@ -1706,6 +1708,8 @@ func (site *Site) Run(stopC chan struct{}, interval time.Duration) {
 	if site.IsConfigured() {
 		go site.loopLoadpoints(loadpointChan)
 	}
+
+	go site.watchLoadForecast(stopC)
 
 	site.update(<-loadpointChan) // start immediately
 

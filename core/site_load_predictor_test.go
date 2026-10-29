@@ -112,15 +112,86 @@ func TestApplyLoadForecast(t *testing.T) {
 	}
 
 	gt := slices.Repeat([]float64{100}, 12)
-	covered := site.applyLoadForecast(gt)
+	covered := applyLoadForecast(gt, currentRates(site.GetTariff(api.TariffUsageLoad)))
 	assert.Equal(t, []float64{200, 200, 200, 200, 0, 0, 0, 0, 100, 100, 100, 100}, gt, "W per hour to Wh per quarter, profile beyond the forecast")
 	assert.Equal(t, append(slices.Repeat([]bool{true}, 8), false, false, false, false), covered)
 
 	// without load forecast the profile stays
-	site.tariffs = &tariff.Tariffs{}
 	gt = slices.Repeat([]float64{100}, 4)
-	assert.Nil(t, site.applyLoadForecast(gt))
+	assert.Nil(t, applyLoadForecast(gt, nil))
 	assert.Equal(t, slices.Repeat([]float64{100}, 4), gt)
+}
+
+func TestLoadForecastFirstStep(t *testing.T) {
+	// 7 minutes left of the running quarter hour at 1200 W: its mean power over the rest
+	start := time.Now().Truncate(tariff.SlotDuration)
+	rates := api.Rates{{Start: start, End: start.Add(tariff.SlotDuration), Value: 1200}}
+
+	gt := []float64{100}
+	applyLoadForecast(gt, rates)
+	assert.InDelta(t, 1200*420/3600.0, prorate(gt, 7*time.Minute)[0], 1e-3)
+}
+
+// issuedForecast is a load forecast issued at given times
+type issuedForecast struct {
+	api.Tariff
+	rates     api.Rates
+	issued    string // the issue held
+	latest    string // the issue a read finds now
+	refreshed int
+}
+
+func (f *issuedForecast) Refresh() error {
+	f.refreshed++
+	f.issued = f.latest
+	return nil
+}
+
+func (f *issuedForecast) GeneratedAt() (string, error) {
+	return f.latest, nil
+}
+
+func (f *issuedForecast) ForecastIssue() (api.Rates, string, error) {
+	return f.rates, f.issued, nil
+}
+
+func TestLoadForecastReadAtEverySolve(t *testing.T) {
+	start := time.Now().Truncate(tariff.SlotDuration)
+	forecast := &issuedForecast{
+		rates: api.Rates{
+			{Start: start.Add(-tariff.SlotDuration), End: start, Value: 5000},
+			{Start: start, End: start.Add(tariff.SlotDuration), Value: 800},
+		},
+		issued: "2026-10-29T10:00:01+00:00",
+		latest: "2026-10-29T10:07:42+00:00",
+	}
+	site := &Site{log: util.NewLogger("test"), tariffs: &tariff.Tariffs{Load: forecast}}
+
+	// a new issue before any solve read one
+	assert.True(t, site.loadForecastIssued(forecast))
+
+	// the solve reads anew, past rates dropped, and remembers the issue
+	rates, issue := site.loadForecast()
+	assert.Equal(t, 1, forecast.refreshed)
+	assert.Equal(t, "2026-10-29T10:07:42+00:00", issue)
+	assert.Equal(t, api.Rates{forecast.rates[1]}, rates)
+	assert.False(t, site.loadForecastIssued(forecast))
+
+	// a newer issue starts a solve
+	forecast.latest = "2026-10-29T10:08:15+00:00"
+	assert.True(t, site.loadForecastIssued(forecast))
+
+	// a forecast without generatedAt never does
+	forecast.latest = ""
+	assert.False(t, site.loadForecastIssued(forecast))
+
+	// a load tariff that is not read anew keeps its rates and has no issue
+	mock := api.NewMockTariff(gomock.NewController(t))
+	mock.EXPECT().Rates().Return(forecast.rates, nil)
+	site.tariffs = &tariff.Tariffs{Load: mock}
+	rates, issue = site.loadForecast()
+	assert.Empty(t, issue)
+	assert.Len(t, rates, 1)
 }
 
 func TestLookupBin(t *testing.T) {

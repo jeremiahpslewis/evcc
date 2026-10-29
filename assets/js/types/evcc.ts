@@ -1641,6 +1641,7 @@ export interface OptimizationDetails {
   demandDetails: DemandDetail[] | null; // Profiles summarized into the household demand, null when there is nothing to break down
   homeProfile?: number[]; // Learned consumption profile replaced by the consumption forecast, energy per slot (Wh), only while one is active
   loadForecast?: boolean[]; // Slots taken from the consumption forecast instead of the learned profile, only while one is active
+  loadForecastGeneratedAt?: string; // When the consumption forecast planned with was issued, as read
 }
 
 // Error response

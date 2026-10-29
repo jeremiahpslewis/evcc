@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -202,7 +203,7 @@ func TestCoarsenHorizon(t *testing.T) {
 	}
 	// forecast for the first 40 hours, ending in the hourly part
 	covered := lo.RepeatBy(minLen, func(i int) bool { return i < 1+4*40 })
-	details := requestDetails{Timestamps: ts, DemandDetails: []demandDetail{{Values: series(50)}}, HomeProfile: series(70), LoadForecast: covered}
+	details := requestDetails{Timestamps: ts, DemandDetails: []demandDetail{{Values: series(50)}}, HomeProfile: series(70), LoadForecast: covered, LoadForecastGeneratedAt: "2026-10-29T10:07:42+00:00"}
 	gt, ft, home, profile := lo.Sum(req.TimeSeries.Gt), lo.Sum(req.TimeSeries.Ft), lo.Sum(details.DemandDetails[0].Values), lo.Sum(details.HomeProfile)
 	pn, demand := req.TimeSeries.PN, req.Batteries[0].PDemand
 
@@ -229,6 +230,7 @@ func TestCoarsenHorizon(t *testing.T) {
 	assert.Len(t, details.LoadForecast, len(res.Dt))
 	assert.True(t, details.LoadForecast[0])
 	assert.False(t, details.LoadForecast[len(res.Dt)-1])
+	assert.Equal(t, "2026-10-29T10:07:42+00:00", details.LoadForecastGeneratedAt)
 	assert.Equal(t, lo.Count(covered[:195], true), lo.Count(details.LoadForecast[:195], true), "quarter slots keep their flag")
 	assert.InDelta(t, lo.Mean(pn[195:199]), res.PN[195], 1e-4)
 	assert.InDelta(t, lo.Sum(demand[195:199]), req.Batteries[0].PDemand[195], 0.01)
@@ -1119,4 +1121,15 @@ func TestEndOfHorizonValue(t *testing.T) {
 	// at a high export price storing surplus only pays above the export price per stored Wh
 	ts.PE = []float32{0.24, 0.24}
 	assert.InDelta(t, 0.24/0.95*1.01, endOfHorizonValue(ts, 0.95, 0.95), 1e-6)
+}
+
+func TestLoadForecastGeneratedAtDetail(t *testing.T) {
+	b, err := json.Marshal(requestDetails{LoadForecast: []bool{true}, LoadForecastGeneratedAt: "2026-10-29T10:07:42+00:00"})
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"loadForecastGeneratedAt":"2026-10-29T10:07:42+00:00"`)
+
+	// left out with the profile throughout
+	b, err = json.Marshal(requestDetails{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), "loadForecast")
 }

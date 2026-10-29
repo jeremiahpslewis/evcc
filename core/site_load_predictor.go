@@ -35,12 +35,77 @@ func (site *Site) meterProfile(ref string, minLen int) ([]float64, error) {
 	return tileAndTrim(base[:], minLen), nil
 }
 
-// applyLoadForecast replaces the home profile slots covered by the configured load
-// forecast and returns which slots it replaced, nil without forecast. The forecast is
-// the household load without loadpoints in W, its rates may be of any length. Slots
-// beyond the forecast keep the profile.
-func (site *Site) applyLoadForecast(gt []float64) []bool {
-	rates := currentRates(site.GetTariff(api.TariffUsageLoad))
+// loadForecastSource is a load forecast read anew at every solve, with when it was issued
+type loadForecastSource interface {
+	Refresh() error
+	GeneratedAt() (string, error)
+	ForecastIssue() (api.Rates, string, error)
+}
+
+// loadForecastPoll is how often the load forecast is looked at for a new issue
+const loadForecastPoll = 30 * time.Second
+
+// loadForecast reads the configured load forecast as a solve plans with it, anew and with
+// the generatedAt of its issue, empty without one. A failed read keeps the rates read
+// last while they are current; stale rates leave the profile in place.
+func (site *Site) loadForecast() (api.Rates, string) {
+	forecast := site.GetTariff(api.TariffUsageLoad)
+	src, ok := forecast.(loadForecastSource)
+	if !ok {
+		return currentRates(forecast), ""
+	}
+
+	if err := src.Refresh(); err != nil {
+		site.log.WARN.Printf("optimizer: load forecast: %v, using the last read", err)
+	}
+
+	rates, issue, err := src.ForecastIssue()
+	if err != nil {
+		return nil, ""
+	}
+	site.loadForecastRead.Store(&issue)
+
+	now := time.Now()
+	return lo.Filter(rates, func(r api.Rate, _ int) bool { return r.End.After(now) }), issue
+}
+
+// loadForecastIssued reports whether the load forecast was issued anew since a solve read it last
+func (site *Site) loadForecastIssued(src loadForecastSource) bool {
+	issue, err := src.GeneratedAt()
+	if err != nil || issue == "" {
+		return false
+	}
+
+	read := site.loadForecastRead.Load()
+	return read == nil || *read != issue
+}
+
+// watchLoadForecast starts a solve when the load forecast is issued anew, so that the plan
+// follows it within a minute. A solve already running reads the older issue, the next poll
+// starts another one.
+func (site *Site) watchLoadForecast(stopC <-chan struct{}) {
+	for tick := time.Tick(loadForecastPoll); ; {
+		select {
+		case <-stopC:
+			return
+		case <-tick:
+		}
+
+		src, ok := site.GetTariff(api.TariffUsageLoad).(loadForecastSource)
+		if !ok || !optimizerEnabled() || !site.loadForecastIssued(src) {
+			continue
+		}
+
+		go site.optimizerUpdateAsync(true)
+	}
+}
+
+// applyLoadForecast replaces the home profile slots covered by the load forecast and
+// returns which slots it replaced, nil without forecast. The forecast is the household
+// load without loadpoints in W, its rates may be of any length; each slot takes the rate
+// at its start, the first the running quarter hour's. Slots beyond the forecast keep
+// the profile.
+func applyLoadForecast(gt []float64, rates api.Rates) []bool {
 	if len(rates) == 0 {
 		return nil
 	}
@@ -69,8 +134,7 @@ type heatingDemand struct {
 }
 
 // addHeatingDemand adds the forecast demand of all heating loadpoints to the home load
-// in Wh and returns the contributions. Must be applied after blending the measured home
-// energy, which does not contain loadpoint power.
+// in Wh and returns the contributions.
 func (site *Site) addHeatingDemand(gt []float64, minLen int) []heatingDemand {
 	var res []heatingDemand
 

@@ -16,7 +16,6 @@ import (
 	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/core/keys"
 	"github.com/evcc-io/evcc/core/loadpoint"
-	"github.com/evcc-io/evcc/core/metrics"
 	"github.com/evcc-io/evcc/core/types"
 	"github.com/evcc-io/evcc/hems/hems"
 	"github.com/evcc-io/evcc/messenger"
@@ -51,7 +50,7 @@ var optimizerChargingStrategies = []string{
 
 const defaultOptimizerChargingStrategy = string(optimizer.OptimizerStrategyChargingStrategyChargeBeforeExport)
 
-// optimizerDecaySlots is the number of slots over which measured values decay into the forecast
+// optimizerDecaySlots is the number of slots over which an unmodelled loadpoint's measured power decays
 const optimizerDecaySlots = 4
 
 // optimizerResult wraps the optimizer publish payload to implement BytesMarshaler.
@@ -436,6 +435,8 @@ type requestDetails struct {
 	DemandDetails  []demandDetail  `json:"demandDetails"`
 	HomeProfile    []float32       `json:"homeProfile,omitempty"`  // base load profile replaced by the load forecast, Wh per slot
 	LoadForecast   []bool          `json:"loadForecast,omitempty"` // slots the load forecast replaced the profile in
+
+	LoadForecastGeneratedAt string `json:"loadForecastGeneratedAt,omitempty"` // generatedAt of the load forecast planned with
 }
 
 type demandType string
@@ -579,21 +580,14 @@ func (site *Site) optimizerRequest(battery []types.Measurement) (optimizer.Optim
 		return req, details, err
 	}
 
-	// a configured load forecast replaces the profile where it has slots, the
-	// profile is kept for comparison
+	// a configured load forecast, read anew, replaces the profile where it has slots, the
+	// profile is kept for comparison. Both are taken as they stand, the first slot included.
 	profile := slices.Clone(gt)
-	loadForecast := site.applyLoadForecast(gt)
+	forecast, issued := site.loadForecast()
+	loadForecast := applyLoadForecast(gt, forecast)
 	replaced := lo.Count(loadForecast, true)
 	if replaced > 0 {
-		site.log.DEBUG.Printf("optimizer: home slots replaced by load forecast: %d of %d", replaced, len(gt))
-	}
-
-	// blend measured energy of the last metrics slot into the first slots
-	if v := site.measuredSlotEnergy(metrics.Home); v > 0 {
-		orig := slices.Clone(gt[:min(optimizerDecaySlots, len(gt))])
-		blendMeasured(gt, v, optimizerDecaySlots)
-		blendMeasured(profile, v, optimizerDecaySlots)
-		site.log.DEBUG.Printf("optimizer: home slots updated with measured %.0fWh: %.0f -> %.0f", v, orig, gt[:len(orig)])
+		site.log.DEBUG.Printf("optimizer: home slots replaced by load forecast %s: %d of %d", issued, replaced, len(gt))
 	}
 
 	// base load before the loadpoint contributions are summarized into gt
@@ -640,6 +634,7 @@ func (site *Site) optimizerRequest(battery []types.Measurement) (optimizer.Optim
 	if replaced > 0 {
 		details.HomeProfile = prorate(profile, firstSlotDuration)
 		details.LoadForecast = loadForecast
+		details.LoadForecastGeneratedAt = issued
 	}
 
 	if site.circuit != nil {
@@ -1363,18 +1358,6 @@ func unmodelledPower(lp loadpoint.API) float64 {
 	}
 
 	return max(0, power)
-}
-
-// measuredSlotEnergy returns the energy in Wh of the last completed
-// metrics slot for the given collector ref, 0 when not available
-func (site *Site) measuredSlotEnergy(ref string) float64 {
-	c, ok := site.collectors[ref]
-	if !ok {
-		return 0
-	}
-
-	v, _ := c.LastSlotEnergy()
-	return v * 1e3
 }
 
 // blendMeasured decays the first slots from the measured value into the

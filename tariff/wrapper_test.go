@@ -113,3 +113,25 @@ func TestWrapperParts(t *testing.T) {
 	w.tariff = &Tariff{parts: map[string]*util.Monitor[api.Rates]{"heatpump": data}}
 	assert.Equal(t, map[string]api.Rates{"heatpump": {{Value: 900}}}, w.Parts())
 }
+
+func TestWrapperForecastIssue(t *testing.T) {
+	// not yet created
+	w := &Wrapper{retriedAt: time.Now(), err: errors.New("unavailable")}
+	_, _, err := w.ForecastIssue()
+	require.ErrorContains(t, err, "tariff not available")
+	issue, err := w.GeneratedAt()
+	require.NoError(t, err)
+	assert.Empty(t, issue)
+	assert.NoError(t, w.Refresh())
+
+	// created custom tariff with an issue
+	data := util.NewMonitor[api.Rates](time.Hour)
+	tf := &Tariff{embed: new(embed), data: data, forecastG: func() (string, error) { return `[{"value":900}]`, nil },
+		generatedAtG: func() (string, error) { return "A", nil }}
+	w.tariff = tf
+	require.NoError(t, w.Refresh())
+	rates, issue, err := w.ForecastIssue()
+	require.NoError(t, err)
+	assert.Equal(t, "A", issue)
+	assert.Equal(t, 900.0, rates[0].Value)
+}

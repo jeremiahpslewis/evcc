@@ -37,3 +37,12 @@ forecast: # consumption without charging and heating controlled by evcc, mean po
 #    entity: sensor.heat_pump_forecast
 #    attribute: forecast
 #    jq: map({ start, end, value: .power }) | tostring
+
+## When the forecast was issued (optional): read with it, polled every 30s, a new issue
+## starts a solve, published as details.loadForecastGeneratedAt
+
+#generatedAt:
+#  source: homeassistant
+#  uri: http://homeassistant.local:8123
+#  entity: sensor.heat_pump_forecast
+#  attribute: generated_at
