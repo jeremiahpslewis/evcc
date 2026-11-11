@@ -1,7 +1,7 @@
 package core
 
 import (
-	"math"
+	"slices"
 	"time"
 
 	"github.com/evcc-io/evcc/api"
@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	evPlanFallback = "planfallback" // plan charges to the floor while the soc is unconfirmed
+	evPlanFallback = "planfallback" // plan charges from the arrival soc while the soc is unconfirmed
 
 	// socFallbackRefusal is how long the vehicle may refuse power in a planned slot before it counts as full
 	socFallbackRefusal = 5 * time.Minute
@@ -31,7 +31,6 @@ type socReport struct {
 
 // socFallback is the session's state of the soc fallback
 type socFallback struct {
-	floor     float64   // soc in % the fallback charges to, 0 without a vehicle capacity
 	idleSince time.Time // charging enabled in a planned slot while the vehicle draws nothing
 	refused   time.Time // plan time the vehicle refused power for, which ends the fallback for that night
 	notified  time.Time // plan time the fallback was announced for
@@ -45,8 +44,7 @@ func socFallbackSettings(v api.Vehicle) api.SocFallback {
 	return api.SocFallback{}.WithDefaults()
 }
 
-// observeSocReport tracks the soc and range read from the vehicle api. A change is a report,
-// recorded with the range for the vehicle's floor.
+// observeSocReport tracks the soc and range read from the vehicle api. A change is a report.
 func (lp *Loadpoint) observeSocReport(v api.Vehicle, socR *float64, rngR *int64) {
 	if v == nil || socR == nil {
 		return
@@ -59,8 +57,9 @@ func (lp *Loadpoint) observeSocReport(v api.Vehicle, socR *float64, rngR *int64)
 	}
 
 	lp.Lock()
+	defer lp.Unlock()
+
 	r := lp.socReport
-	var report bool
 
 	switch {
 	case r.vehicle != v:
@@ -70,7 +69,6 @@ func (lp *Loadpoint) observeSocReport(v api.Vehicle, socR *float64, rngR *int64)
 		r.reported = r.read
 		r.soc = *socR
 		r.rng = max(rng, r.rng)
-		report = rng > 0
 
 	case r.rng < 0:
 		r.rng = rng
@@ -79,15 +77,6 @@ func (lp *Loadpoint) observeSocReport(v api.Vehicle, socR *float64, rngR *int64)
 	r.read = now
 	r.charger = false
 	lp.socReport = r
-	lp.Unlock()
-
-	if report {
-		vs := vehicle.Settings(lp.log, v)
-		reports := soc.AddRangeReport(vs.GetRangeReports(), api.RangeReport{Soc: int(math.Round(*socR)), Range: rng, Time: now})
-		if err := vs.SetRangeReports(reports); err != nil {
-			lp.log.ERROR.Printf("range reports: %v", err)
-		}
-	}
 }
 
 // observeChargerSoc marks the soc as read by the charger from the vehicle itself, which is never stale
@@ -106,12 +95,19 @@ func (lp *Loadpoint) socConfirmed(v api.Vehicle) bool {
 	return r.vehicle == v && !r.reported.IsZero() && !r.reported.Before(lp.connectedTime.Add(-socFallbackSettings(v).Window))
 }
 
-// socFallbackActive returns true while plans with the soc fallback switched on charge to the floor:
+// socFallbackActive returns true while plans with the soc fallback switched on charge from the arrival soc:
 // connected after a long enough unplug, in a mode that honours plans, the soc unconfirmed (no mutex)
 func (lp *Loadpoint) socFallbackActive(v api.Vehicle) bool {
 	connected := lp.status == api.StatusB || lp.status == api.StatusC
-	return v != nil && lp.socFallback.floor > 0 && connected && lp.mode != api.ModeOff &&
+	return connected && v != nil && lp.mode != api.ModeOff && lp.socFallbackEnabled(v) && v.Capacity() > 0 &&
 		lp.unpluggedLong(v) && !lp.socConfirmed(v)
+}
+
+// socFallbackEnabled returns true if an active repeating plan of the vehicle has the soc fallback switched on
+func (lp *Loadpoint) socFallbackEnabled(v api.Vehicle) bool {
+	return slices.ContainsFunc(vehicle.Settings(lp.log, v).GetRepeatingPlans(), func(rp api.RepeatingPlan) bool {
+		return rp.Active && rp.SocFallback
+	})
 }
 
 // unpluggedLong returns true if the vehicle was unplugged longer than its setting before this session,
@@ -120,7 +116,7 @@ func (lp *Loadpoint) unpluggedLong(v api.Vehicle) bool {
 	return lp.unpluggedTime.IsZero() || lp.connectedTime.Sub(lp.unpluggedTime) > socFallbackSettings(v).Unplugged
 }
 
-// planFallback returns true if the next plan charges to the soc fallback's floor (no mutex)
+// planFallback returns true if the next plan charges from the soc fallback's arrival soc (no mutex)
 func (lp *Loadpoint) planFallback() bool {
 	return lp.socFallbackActive(lp.GetVehicle()) && lp.nextPlan().Fallback
 }
@@ -130,7 +126,7 @@ func (lp *Loadpoint) socFallbackSoc(v api.Vehicle) float64 {
 	return socFallbackSettings(v).ArrivalSoc + lp.getChargedEnergy()/(v.Capacity()*1e3/soc.ChargeEfficiency)*100
 }
 
-// GetSocFallback returns the soc the plan assumes and true while it charges to the floor
+// GetSocFallback returns the soc the plan assumes and true while the soc fallback plans
 func (lp *Loadpoint) GetSocFallback() (float64, bool) {
 	lp.RLock()
 	defer lp.RUnlock()
@@ -143,20 +139,13 @@ func (lp *Loadpoint) GetSocFallback() (float64, bool) {
 	return lp.socFallbackSoc(v), true
 }
 
-// updateSocFallback computes the vehicle's floor, ends the fallback for a night the vehicle refuses
-// power and announces a night the fallback takes over. Runs once the vehicle was read.
+// updateSocFallback ends the fallback for a night the vehicle refuses power and announces a night
+// the fallback takes over. Runs once the vehicle was read.
 func (lp *Loadpoint) updateSocFallback() {
 	v := lp.GetVehicle()
 
-	var floor float64
-	if v != nil && v.Capacity() > 0 {
-		cfg := socFallbackSettings(v)
-		reports := vehicle.Settings(lp.log, v).GetRangeReports()
-		floor = soc.FloorSoc(reports, lp.clock.Now(), cfg.FloorRange(), cfg.Consumption, v.Capacity())
-	}
-
 	lp.Lock()
-	event := lp.stepSocFallback(v, floor)
+	event := lp.stepSocFallback(v)
 	lp.Unlock()
 
 	if event != nil {
@@ -165,9 +154,7 @@ func (lp *Loadpoint) updateSocFallback() {
 }
 
 // stepSocFallback updates the fallback state and returns the attributes of an announcement (no mutex)
-func (lp *Loadpoint) stepSocFallback(v api.Vehicle, floor float64) map[string]any {
-	lp.socFallback.floor = floor
-
+func (lp *Loadpoint) stepSocFallback(v api.Vehicle) map[string]any {
 	connected := lp.status == api.StatusB || lp.status == api.StatusC
 	lp.publish(keys.VehicleSocConfirmed, v != nil && connected && lp.socConfirmed(v))
 

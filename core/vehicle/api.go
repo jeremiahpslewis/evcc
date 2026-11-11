@@ -47,9 +47,4 @@ type API interface {
 	GetPlanStrategy() api.PlanStrategy
 	// SetPlanStrategy sets the plan strategy
 	SetPlanStrategy(api.PlanStrategy) error
-
-	// GetRangeReports returns the recent soc and range reports
-	GetRangeReports() []api.RangeReport
-	// SetRangeReports stores the recent soc and range reports
-	SetRangeReports([]api.RangeReport) error
 }

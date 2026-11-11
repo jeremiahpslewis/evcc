@@ -25,22 +25,21 @@ func TestSocFallbackSettings(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, api.SocFallback{
-			Range: 150, Reserve: 10, ArrivalSoc: 5, Window: 30 * time.Minute, Unplugged: 90 * time.Minute, Consumption: 21,
+			ArrivalSoc: 5, Window: 30 * time.Minute, Unplugged: 90 * time.Minute,
 		}, socFallback(t, v))
-		assert.InDelta(t, 165, socFallback(t, v).FloorRange(), 1e-9)
 	})
 
 	t.Run("template passes the block through", func(t *testing.T) {
 		// viper lowercases the keys
 		v, err := NewFromConfig(context.Background(), "template", map[string]any{
 			"template": "offline", "title": "Born", "capacity": 58,
-			"socfallback": map[string]any{"range": 200, "window": "1h"},
+			"socfallback": map[string]any{"arrivalsoc": 10, "window": "1h"},
 		})
 		require.NoError(t, err)
 
 		res := socFallback(t, v)
-		assert.Equal(t, 200.0, res.Range)
+		assert.Equal(t, 10.0, res.ArrivalSoc)
 		assert.Equal(t, time.Hour, res.Window)
-		assert.Equal(t, 21.0, res.Consumption, "unset keys take the defaults")
+		assert.Equal(t, 90*time.Minute, res.Unplugged, "unset keys take the defaults")
 	})
 }

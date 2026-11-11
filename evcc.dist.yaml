@@ -95,13 +95,10 @@ vehicles:
     vin: WREN...
     onIdentify: # set defaults when vehicle is identified
       mode: smart # enable smart charging when vehicle is identified
-    # socFallback: # floor of repeating plans with the soc fallback switched on, while the soc is unconfirmed
-    #   range: 150 # km the floor must cover
-    #   reserve: 10 # % added to the range
-    #   arrivalSoc: 5 # % assumed at plug-in
+    # socFallback: # repeating plans with the soc fallback switched on, while the soc is unconfirmed
+    #   arrivalSoc: 5 # % the plan charges from, as if the vehicle arrived nearly empty
     #   window: 30m # a report this long before plug-in confirms the soc
     #   unplugged: 90m # applies only once the vehicle was unplugged longer, not to a replug without a drive
-    #   consumption: 21 # kWh/100km, while the reported range does not fit a line
 
 # site describes the EVU connection, PV and home battery
 site:
@@ -227,8 +224,8 @@ messaging:
     planoverrun: # current plan is going to overrun
       title: Plan overrun
       msg: "Plan {{- if .vehicleTitle }} for {{ .vehicleTitle }} will overrun.{{ else }} will overrun.{{ end }}"
-    planfallback: # plan charges to the vehicle's floor because its soc is unconfirmed
-      title: Plan charges to the floor
+    planfallback: # plan charges as if the vehicle arrived nearly empty because its soc is unconfirmed
+      title: SoC unconfirmed
       msg: 'SoC unconfirmed, charging ${planFallbackEnergy:%.1f} kWh to ${planFallbackSoc}% by {{ .planFallbackTime.Format "15:04" }}.'
   services:
   # - type: pushover

@@ -140,7 +140,7 @@ describe("plan", () => {
       { charger: "Ready. Waiting for vehicle…", planactive: "Mo 06:00" }
     );
   });
-  test("show the floor while the plan charges to it because the soc is unconfirmed", () => {
+  test("show the plan soc while the plan charges as from nearly empty because the soc is unconfirmed", () => {
     expectEntries(
       {
         effectivePlanTime,

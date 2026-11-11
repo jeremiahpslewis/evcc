@@ -42,7 +42,7 @@ type plan struct {
 	Start    time.Time // last possible start time
 	End      time.Time // user-selected finish time
 	Soc      int
-	Fallback bool // soc is the floor of the soc fallback, planned from the soc the fallback assumes
+	Fallback bool // planned from the soc fallback's arrival soc
 }
 
 func (lp *Loadpoint) nextActivePlan(maxPower float64, plans []plan) *plan {
@@ -130,13 +130,13 @@ func (lp *Loadpoint) vehiclePlans(v api.Vehicle, days int) []plan {
 
 			p := plan{Id: index + 2, Soc: rp.Soc, End: ts}
 
-			// while the soc is unconfirmed the plan charges to the floor only,
-			// and not at all for a night the vehicle refused power
+			// while the soc is unconfirmed the plan charges as if the vehicle arrived at the
+			// arrival soc, and not at all for a night the vehicle refused power
 			if rp.SocFallback && fallback {
 				if ts.Equal(lp.socFallback.refused) {
 					continue
 				}
-				p.Soc, p.Fallback = int(lp.socFallback.floor), true
+				p.Fallback = true
 			}
 
 			plans = append(plans, p)
@@ -157,14 +157,8 @@ func (lp *Loadpoint) GetSocPlanGoals() []loadpoint.PlanGoal {
 		return nil
 	}
 
-	// while the next plan charges to the floor, no plan's own goal is pursued
-	limit := 100
-	if lp.planFallback() {
-		limit = int(lp.socFallback.floor)
-	}
-
 	return lo.Map(lp.vehiclePlans(v, 7), func(p plan, _ int) loadpoint.PlanGoal {
-		return loadpoint.PlanGoal{Time: p.End, Soc: min(p.Soc, limit)}
+		return loadpoint.PlanGoal{Time: p.End, Soc: p.Soc}
 	})
 }
 

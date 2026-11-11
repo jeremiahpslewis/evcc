@@ -19,8 +19,7 @@ import (
 )
 
 // newSocFallbackLoadpoint returns a loadpoint with a 58 kWh vehicle, a daily 06:45 plan to 80 % with the
-// soc fallback switched on, plugged in now. The vehicle's range does not fit a line yet, so the floor
-// is 165 km at 21 kWh/100km: 60 %.
+// soc fallback switched on, plugged in now.
 func newSocFallbackLoadpoint(t *testing.T, fallback bool) (*Loadpoint, *clock.Mock, api.Vehicle) {
 	t.Helper()
 
@@ -46,7 +45,6 @@ func newSocFallbackLoadpoint(t *testing.T, fallback bool) (*Loadpoint, *clock.Mo
 	}))
 	t.Cleanup(func() {
 		_ = settings.Delete(prefix + keys.RepeatingPlans)
-		_ = settings.Delete(prefix + keys.RangeReports)
 	})
 
 	// plan occurrences follow the wall clock
@@ -90,27 +88,22 @@ func TestSocFallbackFrozenSession(t *testing.T) {
 
 	p := lp.nextPlan()
 	require.True(t, p.Fallback, "the stale soc must not make the plan look met")
-	assert.Equal(t, 60, p.Soc, "plans to the floor only")
+	assert.Equal(t, 80, p.Soc, "the plan's own goal")
 
 	fallbackSoc, ok := lp.GetSocFallback()
 	require.True(t, ok)
 	assert.Equal(t, 5.0, fallbackSoc, "assumes arrival at 5 %")
 
-	// (60 - 5) % of 58 kWh at 85 %: about 37.5 kWh at the wallbox, 3.4 hours at 11 kW
-	assert.InDelta(t, 37.5, soc.RemainingChargeEnergy(p.Soc, fallbackSoc, 58), 0.1)
-	assert.InDelta(t, 3.4, lp.GetPlanRequiredDuration(60, 11e3).Hours(), 0.05)
+	// (80 - 5) % of 58 kWh at 85 %: about 51.2 kWh at the wallbox, 4.65 hours at 11 kW
+	assert.InDelta(t, 51.2, soc.RemainingChargeEnergy(p.Soc, fallbackSoc, 58), 0.1)
+	assert.InDelta(t, 4.65, lp.GetPlanRequiredDuration(80, 11e3).Hours(), 0.01)
 
 	goal, socBased := lp.GetPlanGoal()
 	assert.True(t, socBased)
-	assert.Equal(t, 60.0, goal)
+	assert.Equal(t, 80.0, goal)
 
-	// no plan's own goal is pursued while the soc is unconfirmed
-	for _, g := range lp.GetSocPlanGoals() {
-		assert.LessOrEqual(t, g.Soc, 60)
-	}
-
-	// the energy delivered, the car leaves with at least the floor
-	lp.energyMetrics.totalKWh = 37.6
+	// the energy delivered, the car leaves with at least the plan's goal
+	lp.energyMetrics.totalKWh = 51.3
 	assert.Equal(t, plan{}, lp.nextPlan())
 	_, ok = lp.GetSocFallback()
 	assert.False(t, ok)
@@ -325,29 +318,13 @@ func TestSocFallbackEvent(t *testing.T) {
 	ev := <-events
 	assert.Equal(t, evPlanFallback, ev.Event)
 	assert.Equal(t, lp.nextPlan().End, ev.Attributes["planFallbackTime"])
-	assert.Equal(t, 60, ev.Attributes["planFallbackSoc"])
-	assert.InDelta(t, 37.5, ev.Attributes["planFallbackEnergy"], 0.1)
+	assert.Equal(t, 80, ev.Attributes["planFallbackSoc"])
+	assert.InDelta(t, 51.2, ev.Attributes["planFallbackEnergy"], 0.1)
 
 	// once per night
 	clk.Add(time.Minute)
 	lp.updateSocFallback()
 	assert.Empty(t, events)
-}
-
-// The floor follows the line through the vehicle's reported range.
-func TestSocFallbackFloorFromRange(t *testing.T) {
-	lp, clk, v := newSocFallbackLoadpoint(t, true)
-
-	// winter: 2.1 km per % and zero at 4 %
-	clk.Add(-48 * time.Hour)
-	read(lp, v, 90, 181)
-	for s := 89; s >= 20; s -= 7 {
-		clk.Add(time.Hour)
-		read(lp, v, float64(s), int64(2.1*float64(s-4)+0.5))
-	}
-
-	lp.updateSocFallback()
-	assert.Equal(t, 83.0, lp.socFallback.floor)
 }
 
 // The disconnect evcc reports at startup is no unplug: the vehicle may have been away all day.

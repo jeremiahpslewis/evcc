@@ -1007,7 +1007,7 @@ components:
           description: Energy goal of the charging plan in kWh.
           type: number
         planFallback:
-          description: The plan charges to the vehicle's floor because its SoC is unconfirmed.
+          description: The plan charges as if the vehicle arrived nearly empty because its SoC is unconfirmed.
           type: boolean
         planOverrun:
           description: Duration in seconds the charging plan is projected to miss its target time.
@@ -1755,7 +1755,7 @@ components:
           description: Plan is active.
           type: boolean
         socFallback:
-          description: While the vehicle's SoC is unconfirmed, the plan charges to the vehicle's floor.
+          description: While the vehicle's SoC is unconfirmed, the plan charges as if the vehicle arrived nearly empty.
           type: boolean
       required:
         - weekdays

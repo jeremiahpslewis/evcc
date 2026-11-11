@@ -24,7 +24,7 @@ type PlanLock struct {
 	Soc  int       // target soc
 	Id   int       // id (0=none, 1=static, 2+=repeating), needed to highlight the plan in ui
 
-	Fallback bool // soc is the floor of the soc fallback
+	Fallback bool // planned from the soc fallback's arrival soc
 }
 
 // clearPlanLock clears the locked plan goal
@@ -114,7 +114,7 @@ func (lp *Loadpoint) getPlanRequiredDuration(goal, maxPower float64) time.Durati
 	return lp.planRequiredDuration(goal, maxPower, lp.planFallback())
 }
 
-// planRequiredDuration is the estimated total charging duration, for the soc fallback's floor from the soc it assumes
+// planRequiredDuration is the estimated total charging duration, under the soc fallback from the soc it assumes
 func (lp *Loadpoint) planRequiredDuration(goal, maxPower float64, fallback bool) time.Duration {
 	if lp.socBasedPlanning() {
 		switch v, estimator := lp.getVehicleAndSocEstimator(); {

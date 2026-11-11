@@ -4027,7 +4027,7 @@
             "type": "number"
           },
           "planFallback": {
-            "description": "The plan charges to the vehicle's floor because its SoC is unconfirmed.",
+            "description": "The plan charges as if the vehicle arrived nearly empty because its SoC is unconfirmed.",
             "type": "boolean"
           },
           "planOverrun": {
@@ -5433,7 +5433,7 @@
             "type": "boolean"
           },
           "socFallback": {
-            "description": "While the vehicle's SoC is unconfirmed, the plan charges to the vehicle's floor.",
+            "description": "While the vehicle's SoC is unconfirmed, the plan charges as if the vehicle arrived nearly empty.",
             "type": "boolean"
           }
         },

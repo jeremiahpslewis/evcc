@@ -747,7 +747,7 @@ export interface Loadpoint {
   planActive: boolean;
   /** Energy goal of the charging plan in kWh. */
   planEnergy: number;
-  /** The plan charges to the vehicle's floor because its SoC is unconfirmed. */
+  /** The plan charges as if the vehicle arrived nearly empty because its SoC is unconfirmed. */
   planFallback: boolean;
   /** Duration in seconds the charging plan is projected to miss its target time. */
   planOverrun: number;
@@ -1313,7 +1313,7 @@ export interface RepeatingPlan {
   soc: number;
   /** Plan is active. */
   active: boolean;
-  /** While the vehicle's SoC is unconfirmed, the plan charges to the vehicle's floor. */
+  /** While the vehicle's SoC is unconfirmed, the plan charges as if the vehicle arrived nearly empty. */
   socFallback?: boolean;
 }
 

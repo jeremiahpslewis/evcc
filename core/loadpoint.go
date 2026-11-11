@@ -657,7 +657,7 @@ func (lp *Loadpoint) evVehicleConnectHandler() {
 	lp.planEnergyOffset = 0
 
 	// the soc fallback is per session, a charger's soc is read anew
-	lp.socFallback = socFallback{floor: lp.socFallback.floor}
+	lp.socFallback = socFallback{}
 	lp.socReport.charger = false
 
 	// connect adds the loadpoint's demand
@@ -2522,7 +2522,7 @@ func (lp *Loadpoint) publishSocAndRange() {
 			d = time.Duration(e * 1e3 / lp.chargePower * float64(time.Hour)).Round(time.Second)
 		}
 	case fallback.Fallback && v != nil:
-		// the soc fallback's claim: from the soc it assumes to the floor
+		// the soc fallback's claim: from the arrival soc to the plan's goal
 		fallbackSoc := lp.socFallbackSoc(v)
 		if lp.charging() && lp.chargePower > 0 {
 			d = soc.RemainingChargeDuration(float64(fallback.Soc), lp.chargePower, fallbackSoc, v.Capacity())
@@ -2711,7 +2711,7 @@ NO_DIM:
 	// initial update of connected state matches charger status
 	lp.publishSocAndRange()
 
-	// floor, refusal and announcement of the soc fallback, once the vehicle was read
+	// refusal and announcement of the soc fallback, once the vehicle was read
 	lp.updateSocFallback()
 
 	// sync settings with charger

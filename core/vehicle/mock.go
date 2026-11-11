@@ -126,20 +126,6 @@ func (mr *MockAPIMockRecorder) GetPlanStrategy() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlanStrategy", reflect.TypeOf((*MockAPI)(nil).GetPlanStrategy))
 }
 
-// GetRangeReports mocks base method.
-func (m *MockAPI) GetRangeReports() []api.RangeReport {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRangeReports")
-	ret0, _ := ret[0].([]api.RangeReport)
-	return ret0
-}
-
-// GetRangeReports indicates an expected call of GetRangeReports.
-func (mr *MockAPIMockRecorder) GetRangeReports() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeReports", reflect.TypeOf((*MockAPI)(nil).GetRangeReports))
-}
-
 // GetRepeatingPlans mocks base method.
 func (m *MockAPI) GetRepeatingPlans() []api.RepeatingPlan {
 	m.ctrl.T.Helper()
@@ -256,20 +242,6 @@ func (m *MockAPI) SetPlanStrategy(arg0 api.PlanStrategy) error {
 func (mr *MockAPIMockRecorder) SetPlanStrategy(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPlanStrategy", reflect.TypeOf((*MockAPI)(nil).SetPlanStrategy), arg0)
-}
-
-// SetRangeReports mocks base method.
-func (m *MockAPI) SetRangeReports(arg0 []api.RangeReport) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetRangeReports", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetRangeReports indicates an expected call of SetRangeReports.
-func (mr *MockAPIMockRecorder) SetRangeReports(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRangeReports", reflect.TypeOf((*MockAPI)(nil).SetRangeReports), arg0)
 }
 
 // SetRepeatingPlans mocks base method.

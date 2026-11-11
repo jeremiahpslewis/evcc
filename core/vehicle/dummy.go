@@ -75,16 +75,6 @@ func (v *dummy) GetRepeatingPlans() []api.RepeatingPlan {
 	return nil
 }
 
-// GetRangeReports returns the recent soc and range reports
-func (v *dummy) GetRangeReports() []api.RangeReport {
-	return nil
-}
-
-// SetRangeReports stores the recent soc and range reports
-func (v *dummy) SetRangeReports([]api.RangeReport) error {
-	return nil
-}
-
 func (v *dummy) GetPlanStrategy() api.PlanStrategy {
 	return api.PlanStrategy{}
 }

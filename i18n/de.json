@@ -709,8 +709,8 @@
         },
         "planfallback": {
           "messageDefault": "{vehicleTitle}: Ladestand unbestätigt, lädt {energy} kWh auf {soc} bis {time}.",
-          "title": "Wenn der Plan wegen eines unbestätigten Ladestands bis zur Untergrenze lädt",
-          "titleDefault": "Plan lädt bis zur Untergrenze"
+          "title": "Wenn der Plan wegen eines unbestätigten Ladestands lädt, als wäre das Fahrzeug fast leer angekommen",
+          "titleDefault": "Ladestand unbestätigt"
         },
         "soc": {
           "messageDefault": "Batterie geladen auf {vehicleSoc}%",
@@ -1649,7 +1649,7 @@
       "repeating": "wiederholend",
       "repeatingPlans": "Wiederholende Pläne",
       "selectAll": "Alle wählen",
-      "socFallback": "Bei unbestätigtem Ladestand bis zur Untergrenze des Fahrzeugs laden",
+      "socFallback": "Bei unbestätigtem Ladestand laden, als wäre das Fahrzeug fast leer angekommen",
       "strategy": {
         "label": "Strategie"
       },
@@ -1889,7 +1889,7 @@
       "finished": "Abgeschlossen.",
       "minCharge": "Mindestladung bis {soc}.",
       "optimizerControlledTooltip": "Automatische Steuerung: Der Optimizer startet und stoppt das Laden.",
-      "planFallback": "Ladestand unbestätigt: der Plan lädt bis zur Untergrenze von {soc}.",
+      "planFallback": "Ladestand unbestätigt: der Plan lädt auf {soc}, als wäre das Fahrzeug fast leer angekommen.",
       "pvDisable": "Zu wenig Überschuss. Ladung wird gleich pausiert.",
       "pvEnable": "Überschuss verfügbar. Ladung wird gleich fortgesetzt.",
       "scale1p": "Reduziere gleich auf 1-phasiges Laden.",

@@ -709,8 +709,8 @@
         },
         "planfallback": {
           "messageDefault": "{vehicleTitle}: SoC unconfirmed, charging {energy} kWh to {soc} by {time}.",
-          "title": "When the plan charges to the floor because the SoC is unconfirmed",
-          "titleDefault": "Plan charges to the floor"
+          "title": "When the plan charges as if the vehicle arrived nearly empty because its SoC is unconfirmed",
+          "titleDefault": "SoC unconfirmed"
         },
         "soc": {
           "messageDefault": "Battery charged to {vehicleSoc}%",
@@ -1649,7 +1649,7 @@
       "repeating": "repeating",
       "repeatingPlans": "Repeating plans",
       "selectAll": "Select all",
-      "socFallback": "If the SoC is unconfirmed, charge to the vehicle's floor",
+      "socFallback": "If the SoC is unconfirmed, charge as if the vehicle arrived nearly empty",
       "strategy": {
         "label": "Strategy"
       },
@@ -1889,7 +1889,7 @@
       "finished": "Finished.",
       "minCharge": "Minimum charging to {soc}.",
       "optimizerControlledTooltip": "Automatic control. The optimizer starts and stops charging.",
-      "planFallback": "SoC unconfirmed: the plan charges to the floor of {soc}.",
+      "planFallback": "SoC unconfirmed: the plan charges to {soc} as if the vehicle arrived nearly empty.",
       "pvDisable": "Not enough surplus. Pausing soon.",
       "pvEnable": "Surplus available. Starting soon.",
       "scale1p": "Reducing to 1-phase charging soon.",
