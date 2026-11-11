@@ -34,7 +34,7 @@ Every solve reads a custom load forecast anew before it plans; a failed read kee
 
 Both predictions are recorded per slot, the forecast whenever one is configured, the profile while the optimizer is enabled or a forecast replaces it (metrics groups `homeforecast` and `homeprofile`).
 
-A custom load forecast may name `parts`, forecasts of loads it contains that have an aux or consumer meter of their own, keyed by the meter's name, such as a heat pump whose runs are planned after the forecast is made. The optimizer still uses the forecast itself. Each part's forecast and its meter's default profile are recorded per slot (`consumerforecast` and `consumerprofile`, titled like the meter), so that a part can be compared with its meter by energy rather than by timing it does not predict.
+A custom load forecast may name `parts`, forecasts of loads it contains that have an aux or consumer meter of their own, keyed by the meter's name or its title as the UI shows it (a meter configured in the UI is named like `db:5`), such as a heat pump whose runs are planned after the forecast is made. The optimizer still uses the forecast itself. Each part's forecast and its meter's default profile are recorded per slot (`consumerforecast` and `consumerprofile`, titled like the meter), so that a part can be compared with its meter by energy rather than by timing it does not predict.
 
 ### Measured value blending
 

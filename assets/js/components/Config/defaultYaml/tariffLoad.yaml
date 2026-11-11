@@ -28,10 +28,10 @@ forecast: # consumption without charging and heating controlled by evcc, mean po
 
 ## Parts of the forecast measured by an aux or consumer meter of their own, such as a
 ## heat pump whose runs are planned, are recorded per slot next to their meter
-## (optional, keyed by meter name, same format as the forecast)
+## (optional, keyed by the meter's name or title, same format as the forecast)
 
 #parts:
-#  heatpump:
+#  Heat pump:
 #    source: homeassistant
 #    uri: http://homeassistant.local:8123
 #    entity: sensor.heat_pump_forecast

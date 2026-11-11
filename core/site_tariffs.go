@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/evcc-io/evcc/api"
@@ -11,6 +12,7 @@ import (
 	"github.com/evcc-io/evcc/core/metrics"
 	"github.com/evcc-io/evcc/tariff"
 	"github.com/evcc-io/evcc/util"
+	"github.com/evcc-io/evcc/util/config"
 	"github.com/jinzhu/now"
 	"github.com/samber/lo"
 )
@@ -180,7 +182,14 @@ func (site *Site) persistHomeForecasts() {
 		site.setSlotEnergy(metrics.HomeForecast, slotEnergy(r.Value))
 	}
 
-	parts := loadForecastParts(forecast)
+	// parts by the name of the meter they belong to
+	parts := make(map[string]api.Rates)
+	for key, rates := range loadForecastParts(forecast) {
+		if name, ok := site.partMeter(key); ok {
+			parts[name] = rates
+		}
+	}
+
 	for name, rates := range parts {
 		if r, err := rates.At(now); err == nil {
 			site.setSlotEnergy(metrics.ConsumerForecast+"/"+name, slotEnergy(r.Value))
@@ -202,7 +211,28 @@ func (site *Site) persistHomeForecasts() {
 	}
 }
 
-// loadForecastParts returns the rates of the metered parts of a load forecast by meter name
+// partMeter returns the name of the aux or consumer meter a load forecast part is keyed by,
+// its name or its title: a meter configured in the UI is named like db:5, but titled like Heat pump
+func (site *Site) partMeter(key string) (string, bool) {
+	if _, ok := site.collectors[metrics.ConsumerForecast+"/"+key]; ok {
+		return key, true
+	}
+
+	var res []string
+	for _, dev := range lo.Flatten([][]config.Device[api.Meter]{site.auxMeters, site.consumerMeters}) {
+		if title := deviceProperties(dev).Title; title != "" && strings.EqualFold(strings.TrimSpace(title), strings.TrimSpace(key)) {
+			res = append(res, dev.Config().Name)
+		}
+	}
+
+	// a title shared by several meters names none of them
+	if len(res) == 1 {
+		return res[0], true
+	}
+	return "", false
+}
+
+// loadForecastParts returns the rates of the metered parts of a load forecast by the key it names them
 func loadForecastParts(forecast api.Tariff) map[string]api.Rates {
 	if p, ok := forecast.(interface{ Parts() map[string]api.Rates }); ok {
 		return p.Parts()

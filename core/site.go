@@ -405,8 +405,8 @@ func (site *Site) Boot(log *util.Logger, loadpoints []*Loadpoint, tariffs *tarif
 	}
 
 	for name := range loadForecastParts(site.GetTariff(api.TariffUsageLoad)) {
-		if _, ok := site.collectors[metrics.ConsumerForecast+"/"+name]; !ok {
-			site.log.WARN.Printf("load forecast part %s: no aux or consumer meter of that name", name)
+		if _, ok := site.partMeter(name); !ok {
+			site.log.WARN.Printf("load forecast part %s: no single aux or consumer meter of that name or title", name)
 		}
 	}
 

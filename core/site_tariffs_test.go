@@ -11,6 +11,7 @@ import (
 	"github.com/evcc-io/evcc/db"
 	"github.com/evcc-io/evcc/tariff"
 	"github.com/evcc-io/evcc/util"
+	"github.com/evcc-io/evcc/util/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -242,5 +243,28 @@ func TestPersistLoadForecastParts(t *testing.T) {
 		require.Len(t, res[0].Data, 1, group)
 		assert.Equal(t, "Heat Pump", res[0].Title, group)
 		assert.InDelta(t, energy, res[0].Data[0].Energy, 1e-9, group)
+	}
+}
+
+func TestLoadForecastPartMeter(t *testing.T) {
+	titled := func(id int, title string) config.Device[api.Meter] {
+		return config.NewConfigurableDevice(&config.Config{ID: id, Properties: config.Properties{Title: title}}, api.Meter(nil))
+	}
+
+	site := &Site{
+		consumerMeters: []config.Device[api.Meter]{titled(5, "Heat pump"), titled(6, "Plug"), titled(7, "Plug")},
+		collectors:     map[string]*metrics.Collector{metrics.ConsumerForecast + "/heatpump": nil},
+	}
+
+	for key, want := range map[string]string{
+		"heatpump":   "heatpump",          // by name
+		"Heat pump":  config.NameForID(5), // by title as the UI shows it
+		" heat PUMP": config.NameForID(5), // case and spaces aside
+		"Plug":       "",                  // a title two meters share
+		"boiler":     "",                  // none
+	} {
+		name, ok := site.partMeter(key)
+		assert.Equal(t, want, name, key)
+		assert.Equal(t, want != "", ok, key)
 	}
 }
