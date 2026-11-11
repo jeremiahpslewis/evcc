@@ -349,3 +349,22 @@ func TestSocFallbackFloorFromRange(t *testing.T) {
 	lp.updateSocFallback()
 	assert.Equal(t, 83.0, lp.socFallback.floor)
 }
+
+// The disconnect evcc reports at startup is no unplug: the vehicle may have been away all day.
+func TestSocFallbackUnpluggedAtStartup(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	charger := api.NewMockCharger(ctrl)
+	charger.EXPECT().Status().Return(api.StatusA, nil).AnyTimes()
+
+	clk := clock.NewMock()
+	lp := NewLoadpoint(util.NewLogger("foo"), nil)
+	lp.clock = clk
+	lp.charger = charger
+
+	require.NoError(t, lp.updateChargerStatus())
+	assert.True(t, lp.unpluggedTime.IsZero(), "startup")
+
+	lp.status = api.StatusB
+	require.NoError(t, lp.updateChargerStatus())
+	assert.Equal(t, clk.Now(), lp.unpluggedTime, "unplugged")
+}

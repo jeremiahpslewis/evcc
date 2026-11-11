@@ -668,9 +668,6 @@ func (lp *Loadpoint) evVehicleConnectHandler() {
 func (lp *Loadpoint) evVehicleDisconnectHandler() {
 	lp.log.INFO.Println("car disconnected")
 
-	// a short unplug, e.g. a replug without a drive, leaves the soc fallback out
-	lp.unpluggedTime = lp.clock.Now()
-
 	// re-read energy from charger and re-persist session if values improved
 	lp.finalizeSessionEnergy()
 
@@ -1331,6 +1328,10 @@ func (lp *Loadpoint) updateChargerStatus() error {
 						lp.welcomeUntil = lp.clock.Now().Add(welcomeChargeDuration)
 					}
 				case evVehicleDisconnect:
+					// a short unplug, e.g. a replug without a drive, leaves the soc fallback out.
+					// The startup's disconnect is none: how long the vehicle was away stays unknown.
+					lp.unpluggedTime = lp.clock.Now()
+
 					// a still-pending connect means the vehicle disconnected before
 					// its notification was confirmed; omit both connect and disconnect
 					if lp.connectPending {
