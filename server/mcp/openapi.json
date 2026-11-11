@@ -4026,6 +4026,10 @@
             "description": "Energy goal of the charging plan in kWh.",
             "type": "number"
           },
+          "planFallback": {
+            "description": "The plan charges to the vehicle's floor because its SoC is unconfirmed.",
+            "type": "boolean"
+          },
           "planOverrun": {
             "description": "Duration in seconds the charging plan is projected to miss its target time.",
             "type": "number"
@@ -4175,6 +4179,10 @@
             "description": "Charge level of the connected vehicle in %. Temperature in degrees for heating devices.",
             "type": "number"
           },
+          "vehicleSocConfirmed": {
+            "description": "The connected vehicle reported its SoC since it was plugged in, or shortly before.",
+            "type": "boolean"
+          },
           "vehicleTitle": {
             "description": "Title of the connected vehicle for UI display.",
             "type": "string"
@@ -4251,6 +4259,7 @@
           "plan",
           "planActive",
           "planEnergy",
+          "planFallback",
           "planOverrun",
           "planStrategy",
           "planProjectedEnd",
@@ -4279,6 +4288,7 @@
           "vehicleOdometer",
           "vehicleRange",
           "vehicleSoc",
+          "vehicleSocConfirmed",
           "vehicleTitle",
           "vehicleWelcomeActive",
           "batteryBoostLimit"
@@ -5275,6 +5285,9 @@
           "planoverrun": {
             "$ref": "#/components/schemas/MessagingEvent"
           },
+          "planfallback": {
+            "$ref": "#/components/schemas/MessagingEvent"
+          },
           "suggestion": {
             "$ref": "#/components/schemas/MessagingEvent"
           }
@@ -5288,6 +5301,7 @@
           "guest",
           "asleep",
           "planoverrun",
+          "planfallback",
           "suggestion"
         ],
         "additionalProperties": false
@@ -5416,6 +5430,10 @@
           },
           "active": {
             "description": "Plan is active.",
+            "type": "boolean"
+          },
+          "socFallback": {
+            "description": "While the vehicle's SoC is unconfirmed, the plan charges to the vehicle's floor.",
             "type": "boolean"
           }
         },

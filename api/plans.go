@@ -11,6 +11,9 @@ type RepeatingPlan struct {
 	Tz       string `json:"tz"`       // timezone in IANA format
 	Soc      int    `json:"soc"`      // target soc
 	Active   bool   `json:"active"`   // active flag
+
+	// SocFallback charges to the vehicle's floor while the session's soc is unconfirmed
+	SocFallback bool `json:"socFallback,omitempty"`
 }
 
 type PlanStrategy struct {

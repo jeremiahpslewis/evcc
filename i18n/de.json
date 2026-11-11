@@ -707,6 +707,11 @@
           "title": "Wenn das geplante Laden überschritten wird",
           "titleDefault": "Plan überschritten"
         },
+        "planfallback": {
+          "messageDefault": "{vehicleTitle}: Ladestand unbestätigt, lädt {energy} kWh auf {soc} bis {time}.",
+          "title": "Wenn der Plan wegen eines unbestätigten Ladestands bis zur Untergrenze lädt",
+          "titleDefault": "Plan lädt bis zur Untergrenze"
+        },
         "soc": {
           "messageDefault": "Batterie geladen auf {vehicleSoc}%",
           "title": "Ladestandsaktualisierung",
@@ -1644,6 +1649,7 @@
       "repeating": "wiederholend",
       "repeatingPlans": "Wiederholende Pläne",
       "selectAll": "Alle wählen",
+      "socFallback": "Bei unbestätigtem Ladestand bis zur Untergrenze des Fahrzeugs laden",
       "strategy": {
         "label": "Strategie"
       },
@@ -1844,7 +1850,8 @@
       "temp": "Temperatur",
       "tempLimit": "Temperaturlimit",
       "unknown": "Gastfahrzeug",
-      "vehicleSoc": "Ladestand"
+      "vehicleSoc": "Ladestand",
+      "vehicleSocUnconfirmed": "unbestätigt"
     },
     "vehicleSettings": {
       "connectedTo": "verbunden mit {0}",
@@ -1882,6 +1889,7 @@
       "finished": "Abgeschlossen.",
       "minCharge": "Mindestladung bis {soc}.",
       "optimizerControlledTooltip": "Automatische Steuerung: Der Optimizer startet und stoppt das Laden.",
+      "planFallback": "Ladestand unbestätigt: der Plan lädt bis zur Untergrenze von {soc}.",
       "pvDisable": "Zu wenig Überschuss. Ladung wird gleich pausiert.",
       "pvEnable": "Überschuss verfügbar. Ladung wird gleich fortgesetzt.",
       "scale1p": "Reduziere gleich auf 1-phasiges Laden.",

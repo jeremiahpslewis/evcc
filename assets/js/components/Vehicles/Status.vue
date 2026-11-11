@@ -123,6 +123,7 @@ export default defineComponent({
 		phaseAction: { type: String, default: "" },
 		phaseRemainingInterpolated: Number,
 		planActive: Boolean,
+		planFallback: Boolean,
 		planOverrun: Number,
 		planProjectedEnd: String,
 		planProjectedStart: String,
@@ -399,6 +400,19 @@ export default defineComponent({
 					testId: "vehicle-status-optimizer-controlled",
 					clickable: true,
 					clickHandler: () => this.$router.push("/optimize"),
+				},
+				{
+					id: "planFallback",
+					visible: this.connected && this.planFallback && !this.chargingPlanDisabled,
+					content: this.fmtPercentage(this.effectivePlanSoc),
+					tooltipContent: t("planFallback", {
+						soc: this.fmtPercentage(this.effectivePlanSoc),
+					}),
+					iconComponent: VehicleMinSocIcon,
+					itemClass: "text-warning",
+					testId: "vehicle-status-planfallback",
+					clickable: true,
+					clickHandler: () => this.openPlanModal(),
 				},
 				{
 					id: "planActive",

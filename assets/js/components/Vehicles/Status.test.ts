@@ -23,6 +23,7 @@ const allEntries = {
   smartcost: false,
   planactive: false,
   planstart: false,
+  planfallback: false,
   suggestion: false,
 };
 
@@ -137,6 +138,18 @@ describe("plan", () => {
     expectEntries(
       { planProjectedEnd, planActive: true, enabled: true, connected: true },
       { charger: "Ready. Waiting for vehicle…", planactive: "Mo 06:00" }
+    );
+  });
+  test("show the floor while the plan charges to it because the soc is unconfirmed", () => {
+    expectEntries(
+      {
+        effectivePlanTime,
+        effectivePlanSoc: 60,
+        planProjectedStart,
+        planFallback: true,
+        connected: true,
+      },
+      { charger: "Connected.", planstart: "Mo 03:00", planfallback: "60 %" }
     );
   });
   test("show projected start if not enabled yet", () => {

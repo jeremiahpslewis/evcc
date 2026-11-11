@@ -225,7 +225,7 @@ func TestPlanLocking(t *testing.T) {
 	planTime := now.Add(2 * time.Hour)
 
 	t.Run("lock and unlock", func(t *testing.T) {
-		lp.lockPlanGoal(planTime, 80, 2)
+		lp.lockPlanGoal(planTime, 80, 2, false)
 
 		// locked values returned before plan target
 		ts, soc, id := lp.nextVehiclePlan()

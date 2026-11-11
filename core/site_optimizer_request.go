@@ -320,6 +320,11 @@ func (site *Site) loadpointRequest(lp loadpoint.API, minLen int, firstSlotDurati
 	capacity := v.Capacity() // kWh
 	soc := lp.GetSoc()       // percent
 
+	// an unconfirmed soc may be stale, the plan's soc fallback assumes its own
+	if fallbackSoc, ok := lp.GetSocFallback(); ok {
+		soc = fallbackSoc
+	}
+
 	// without capacity or soc there is no battery state to model, but a session energy
 	// limit still bounds the charge- use charged energy as state (see remainingLimitEnergy)
 	if limit := lp.GetLimitEnergy(); limit > 0 && (capacity == 0 || soc == 0) {

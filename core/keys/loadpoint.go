@@ -105,6 +105,11 @@ const (
 	// repeating plans
 	RepeatingPlans = "repeatingPlans" // key to access all repeating plans in db
 
+	// soc fallback
+	RangeReports        = "rangeReports"        // key to access the vehicle's recent soc and range reports in db
+	VehicleSocConfirmed = "vehicleSocConfirmed" // vehicle reported its soc since plug-in
+	PlanFallback        = "planFallback"        // plan charges to the floor while the soc is unconfirmed
+
 	// remote control
 	RemoteDisabled       = "remoteDisabled"       // remote disabled
 	RemoteDisabledSource = "remoteDisabledSource" // remote disabled source

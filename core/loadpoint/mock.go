@@ -729,6 +729,21 @@ func (mr *MockAPIMockRecorder) GetSocConfig() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSocConfig", reflect.TypeOf((*MockAPI)(nil).GetSocConfig))
 }
 
+// GetSocFallback mocks base method.
+func (m *MockAPI) GetSocFallback() (float64, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSocFallback")
+	ret0, _ := ret[0].(float64)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetSocFallback indicates an expected call of GetSocFallback.
+func (mr *MockAPIMockRecorder) GetSocFallback() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSocFallback", reflect.TypeOf((*MockAPI)(nil).GetSocFallback))
+}
+
 // GetSocPlanGoals mocks base method.
 func (m *MockAPI) GetSocPlanGoals() []PlanGoal {
 	m.ctrl.T.Helper()

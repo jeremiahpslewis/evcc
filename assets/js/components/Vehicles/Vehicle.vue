@@ -35,7 +35,7 @@
 				class="flex-grow-1"
 				:label="vehicleSocTitle"
 				:value="formattedSoc"
-				:extraValue="range ? `${fmtNumber(range, 0)} ${rangeUnit}` : ''"
+				:extraValue="socExtraValue"
 				data-testid="current-soc"
 				align="start"
 			/>
@@ -155,6 +155,7 @@ export default defineComponent({
 		planTime: String,
 		planTimeUnreachable: Boolean,
 		planOverrun: Number,
+		planFallback: Boolean,
 		pvAction: String,
 		pvRemainingInterpolated: Number,
 		sessionSolarPercentage: Number,
@@ -177,6 +178,7 @@ export default defineComponent({
 		vehicleRange: { type: Number, default: 0 },
 		vehicles: Array,
 		vehicleSoc: { type: Number, default: 0 },
+		vehicleSocConfirmed: Boolean,
 		vehicleLimitSoc: Number,
 		vehicleNotReachable: Boolean,
 		minSocNotReached: Boolean,
@@ -240,6 +242,13 @@ export default defineComponent({
 				return this.fmtTemperature(this.vehicleSoc);
 			}
 			return this.fmtPercentage(this.vehicleSoc);
+		},
+		socExtraValue(): string {
+			// a soc the vehicle has not reported since plug-in may be stale, like its range
+			if (this.connected && !this.heating && this.vehicleSoc && !this.vehicleSocConfirmed) {
+				return this.$t("main.vehicle.vehicleSocUnconfirmed");
+			}
+			return this.range ? `${this.fmtNumber(this.range, 0)} ${this.rangeUnit}` : "";
 		},
 		vehicleSocTitle() {
 			if (this.heating) {

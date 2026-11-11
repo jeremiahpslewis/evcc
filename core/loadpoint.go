@@ -172,6 +172,11 @@ type Loadpoint struct {
 	planOverrunSent  bool             // notification has been sent already
 	planLocked       PlanLock         // locked plan
 
+	// soc fallback
+	socReport     socReport   // raw soc and range read from the vehicle, whose changes confirm the soc
+	socFallback   socFallback // the session's soc fallback
+	unpluggedTime time.Time   // time the vehicle was disconnected, zero if unknown
+
 	// optimizer
 	suggestion        *types.Suggestion // optimizer suggestion for the current slot
 	suggestionUpdated time.Time         // time the suggestion was received
@@ -651,6 +656,10 @@ func (lp *Loadpoint) evVehicleConnectHandler() {
 	// reset energy-based charging plan offset
 	lp.planEnergyOffset = 0
 
+	// the soc fallback is per session, a charger's soc is read anew
+	lp.socFallback = socFallback{floor: lp.socFallback.floor}
+	lp.socReport.charger = false
+
 	// connect adds the loadpoint's demand
 	lp.triggerOptimizer()
 }
@@ -658,6 +667,9 @@ func (lp *Loadpoint) evVehicleConnectHandler() {
 // evVehicleDisconnectHandler sends external start event
 func (lp *Loadpoint) evVehicleDisconnectHandler() {
 	lp.log.INFO.Println("car disconnected")
+
+	// a short unplug, e.g. a replug without a drive, leaves the soc fallback out
+	lp.unpluggedTime = lp.clock.Now()
 
 	// re-read energy from charger and re-persist session if values improved
 	lp.finalizeSessionEnergy()
@@ -2434,7 +2446,9 @@ func (lp *Loadpoint) publishSocAndRange() {
 	}
 
 	socR, limitR, _ := socAndLimit("charger", lp.charger)
-	if socR == nil && (lp.vehicleSocPollAllowed() || lp.chargerHasFeature(api.IntegratedDevice)) {
+	if socR != nil {
+		lp.observeChargerSoc()
+	} else if lp.vehicleSocPollAllowed() || lp.chargerHasFeature(api.IntegratedDevice) {
 		var socErr error
 		socR, limitR, socErr = socAndLimit("vehicle", v)
 
@@ -2445,15 +2459,20 @@ func (lp *Loadpoint) publishSocAndRange() {
 		}
 
 		// range
+		var rngR *int64
 		if vs, ok := api.Cap[api.VehicleRange](v); ok {
 			if rng, err := vs.Range(); err == nil {
 				lp.log.DEBUG.Printf("vehicle range: %dkm", rng)
 				lp.vehicleRange = rng
 				lp.publish(keys.VehicleRange, rng)
+				rngR = &rng
 			} else if !loadpoint.AcceptableError(err) {
 				lp.log.ERROR.Printf("vehicle range: %v", err)
 			}
 		}
+
+		// raw values before the estimator, whose changes confirm the soc
+		lp.observeSocReport(v, socR, rngR)
 	}
 
 	if socEstimator != nil {
@@ -2478,6 +2497,10 @@ func (lp *Loadpoint) publishSocAndRange() {
 	lp.RLock()
 	planActive := lp.planActive
 	limitEnergy, energyLimited := lp.remainingLimitEnergy()
+	var fallback plan
+	if lp.socBasedPlanning() && lp.planFallback() {
+		fallback = lp.nextPlan()
+	}
 	lp.RUnlock()
 
 	limitSoc := lp.EffectiveLimitSoc()
@@ -2497,6 +2520,13 @@ func (lp *Loadpoint) publishSocAndRange() {
 		if lp.charging() && lp.chargePower > 0 {
 			d = time.Duration(e * 1e3 / lp.chargePower * float64(time.Hour)).Round(time.Second)
 		}
+	case fallback.Fallback && v != nil:
+		// the soc fallback's claim: from the soc it assumes to the floor
+		fallbackSoc := lp.socFallbackSoc(v)
+		if lp.charging() && lp.chargePower > 0 {
+			d = soc.RemainingChargeDuration(float64(fallback.Soc), lp.chargePower, fallbackSoc, v.Capacity())
+		}
+		e = soc.RemainingChargeEnergy(fallback.Soc, fallbackSoc, v.Capacity())
 	case socEstimator != nil:
 		if lp.charging() && lp.chargePower > 0 {
 			d = socEstimator.RemainingChargeDuration(float64(limitSoc), lp.chargePower)
@@ -2679,6 +2709,9 @@ NO_DIM:
 	// publish soc after updating charger status to make sure
 	// initial update of connected state matches charger status
 	lp.publishSocAndRange()
+
+	// floor, refusal and announcement of the soc fallback, once the vehicle was read
+	lp.updateSocFallback()
 
 	// sync settings with charger
 	if err := lp.syncCharger(); err != nil {

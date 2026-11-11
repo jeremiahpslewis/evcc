@@ -273,4 +273,6 @@ type API interface {
 	StartVehicleDetection()
 	// GetSoc returns the last vehicle or charger soc in %
 	GetSoc() float64
+	// GetSocFallback returns the soc in % the plan assumes and true while it charges to the soc fallback's floor
+	GetSocFallback() (float64, bool)
 }

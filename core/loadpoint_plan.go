@@ -23,6 +23,8 @@ type PlanLock struct {
 	Time time.Time // target time (committed goal, persists during overrun)
 	Soc  int       // target soc
 	Id   int       // id (0=none, 1=static, 2+=repeating), needed to highlight the plan in ui
+
+	Fallback bool // soc is the floor of the soc fallback
 }
 
 // clearPlanLock clears the locked plan goal
@@ -38,11 +40,12 @@ func (lp *Loadpoint) ClearPlanLock() {
 }
 
 // lockPlanGoal locks the current plan goal to handle overruns (soc-based plans)
-func (lp *Loadpoint) lockPlanGoal(planTime time.Time, soc int, id int) {
+func (lp *Loadpoint) lockPlanGoal(planTime time.Time, soc int, id int, fallback bool) {
 	lp.planLocked = PlanLock{
-		Time: planTime,
-		Soc:  soc,
-		Id:   id,
+		Time:     planTime,
+		Soc:      soc,
+		Id:       id,
+		Fallback: fallback,
 	}
 }
 
@@ -108,8 +111,15 @@ func (lp *Loadpoint) unsampledSoc(v api.Vehicle, estimator *soc.Estimator) (floa
 
 // getPlanRequiredDuration is the estimated total charging duration
 func (lp *Loadpoint) getPlanRequiredDuration(goal, maxPower float64) time.Duration {
+	return lp.planRequiredDuration(goal, maxPower, lp.planFallback())
+}
+
+// planRequiredDuration is the estimated total charging duration, for the soc fallback's floor from the soc it assumes
+func (lp *Loadpoint) planRequiredDuration(goal, maxPower float64, fallback bool) time.Duration {
 	if lp.socBasedPlanning() {
 		switch v, estimator := lp.getVehicleAndSocEstimator(); {
+		case v != nil && fallback:
+			return soc.RemainingChargeDuration(goal, maxPower, lp.socFallbackSoc(v), v.Capacity())
 		case estimator != nil:
 			if chargedSoc, ok := lp.unsampledSoc(v, estimator); ok {
 				return soc.RemainingChargeDuration(goal, maxPower, chargedSoc, v.Capacity())
@@ -270,7 +280,7 @@ func (lp *Loadpoint) plannerActive() (active bool) {
 			active = true
 		}
 		if active && lp.planLocked.Id == 0 && isSocBased {
-			lp.lockPlanGoal(planTime, int(goal), lp.getPlanId())
+			lp.lockPlanGoal(planTime, int(goal), lp.getPlanId(), lp.planFallback())
 		}
 		return active
 	}
@@ -284,7 +294,7 @@ func (lp *Loadpoint) plannerActive() (active bool) {
 
 		// lock the goal when soc-based plan becomes active for the first time
 		if lp.planLocked.Id == 0 && isSocBased {
-			lp.lockPlanGoal(planTime, int(goal), lp.getPlanId())
+			lp.lockPlanGoal(planTime, int(goal), lp.getPlanId(), lp.planFallback())
 		}
 
 		// remember last active plan's slot end time

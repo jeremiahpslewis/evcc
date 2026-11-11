@@ -38,15 +38,16 @@ func (lp *Loadpoint) EffectivePriority() int {
 }
 
 type plan struct {
-	Id    int
-	Start time.Time // last possible start time
-	End   time.Time // user-selected finish time
-	Soc   int
+	Id       int
+	Start    time.Time // last possible start time
+	End      time.Time // user-selected finish time
+	Soc      int
+	Fallback bool // soc is the floor of the soc fallback, planned from the soc the fallback assumes
 }
 
 func (lp *Loadpoint) nextActivePlan(maxPower float64, plans []plan) *plan {
 	for i, p := range plans {
-		requiredDuration := lp.getPlanRequiredDuration(float64(p.Soc), maxPower)
+		requiredDuration := lp.planRequiredDuration(float64(p.Soc), maxPower, p.Fallback)
 		plans[i].Start = p.End.Add(-requiredDuration)
 	}
 
@@ -61,7 +62,12 @@ func (lp *Loadpoint) nextActivePlan(maxPower float64, plans []plan) *plan {
 	}
 
 	for _, p := range plans {
-		if vehicleSoc == 0 || vehicleSoc < float64(p.Soc) {
+		soc := vehicleSoc
+		if v := lp.GetVehicle(); p.Fallback && v != nil {
+			soc = lp.socFallbackSoc(v)
+		}
+
+		if soc == 0 || soc < float64(p.Soc) {
 			return &p
 		}
 	}
@@ -72,19 +78,25 @@ func (lp *Loadpoint) nextActivePlan(maxPower float64, plans []plan) *plan {
 // nextVehiclePlan returns the next vehicle plan time, soc, id
 // Returns locked plan if available, otherwise calculates fresh
 func (lp *Loadpoint) nextVehiclePlan() (time.Time, int, int) {
+	p := lp.nextPlan()
+	return p.End, p.Soc, p.Id
+}
+
+// nextPlan returns the locked plan if available, otherwise the next active vehicle plan, zero if none
+func (lp *Loadpoint) nextPlan() plan {
 	// return locked plan if available
 	if p := lp.planLocked; p.Id > 0 {
-		return p.Time, p.Soc, p.Id
+		return plan{Id: p.Id, End: p.Time, Soc: p.Soc, Fallback: p.Fallback}
 	}
 
 	// calculate fresh plan
 	if v := lp.GetVehicle(); v != nil {
 		// calculate earliest required plan start
 		if plan := lp.nextActivePlan(lp.effectiveMaxPower(), lp.vehiclePlans(v, 1)); plan != nil {
-			return plan.End, plan.Soc, plan.Id
+			return *plan
 		}
 	}
-	return time.Time{}, 0, 0
+	return plan{}
 }
 
 // vehiclePlans returns the static plan and each occurrence of active repeating plans within the given days
@@ -97,6 +109,8 @@ func (lp *Loadpoint) vehiclePlans(v api.Vehicle, days int) []plan {
 	}
 
 	// repeating plans
+	fallback := lp.socFallbackActive(v)
+
 	for index, rp := range vehicle.Settings(lp.log, v).GetRepeatingPlans() {
 		if !rp.Active || len(rp.Weekdays) == 0 {
 			continue
@@ -109,9 +123,23 @@ func (lp *Loadpoint) vehiclePlans(v api.Vehicle, days int) []plan {
 		}
 
 		for d := range days {
-			if ts := planTime.AddDate(0, 0, d); slices.Contains(rp.Weekdays, int(ts.Weekday())) {
-				plans = append(plans, plan{Id: index + 2, Soc: rp.Soc, End: ts})
+			ts := planTime.AddDate(0, 0, d)
+			if !slices.Contains(rp.Weekdays, int(ts.Weekday())) {
+				continue
 			}
+
+			p := plan{Id: index + 2, Soc: rp.Soc, End: ts}
+
+			// while the soc is unconfirmed the plan charges to the floor only,
+			// and not at all for a night the vehicle refused power
+			if rp.SocFallback && fallback {
+				if ts.Equal(lp.socFallback.refused) {
+					continue
+				}
+				p.Soc, p.Fallback = int(lp.socFallback.floor), true
+			}
+
+			plans = append(plans, p)
 		}
 	}
 
@@ -129,8 +157,14 @@ func (lp *Loadpoint) GetSocPlanGoals() []loadpoint.PlanGoal {
 		return nil
 	}
 
+	// while the next plan charges to the floor, no plan's own goal is pursued
+	limit := 100
+	if lp.planFallback() {
+		limit = int(lp.socFallback.floor)
+	}
+
 	return lo.Map(lp.vehiclePlans(v, 7), func(p plan, _ int) loadpoint.PlanGoal {
-		return loadpoint.PlanGoal{Time: p.End, Soc: p.Soc}
+		return loadpoint.PlanGoal{Time: p.End, Soc: min(p.Soc, limit)}
 	})
 }
 

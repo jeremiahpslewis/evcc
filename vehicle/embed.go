@@ -13,6 +13,7 @@ type embed struct {
 	Identifiers_ []string         `mapstructure:"identifiers"`
 	Features_    []api.Feature    `mapstructure:"features"`
 	OnIdentify   api.ActionConfig `mapstructure:"onIdentify"`
+	SocFallback_ api.SocFallback  `mapstructure:"socFallback"`
 }
 
 // Title implements the api.Vehicle interface
@@ -69,4 +70,11 @@ var _ api.FeatureDescriber = (*embed)(nil)
 // Features implements the api.FeatureDescriber interface
 func (v *embed) Features() []api.Feature {
 	return v.Features_
+}
+
+var _ api.SocFallbackDescriber = (*embed)(nil)
+
+// SocFallback implements the api.SocFallbackDescriber interface
+func (v *embed) SocFallback() api.SocFallback {
+	return v.SocFallback_.WithDefaults()
 }

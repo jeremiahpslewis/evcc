@@ -219,6 +219,20 @@ func (v *adapter) GetRepeatingPlans() []api.RepeatingPlan {
 	return plans
 }
 
+// GetRangeReports returns the recent soc and range reports
+func (v *adapter) GetRangeReports() []api.RangeReport {
+	var res []api.RangeReport
+	if err := settings.Json(v.key()+keys.RangeReports, &res); err != nil {
+		return nil
+	}
+	return res
+}
+
+// SetRangeReports stores the recent soc and range reports
+func (v *adapter) SetRangeReports(reports []api.RangeReport) error {
+	return settings.SetJson(v.key()+keys.RangeReports, reports)
+}
+
 func (v *adapter) GetPlanStrategy() api.PlanStrategy {
 	var strategy api.PlanStrategy
 	if err := settings.Json(v.key()+keys.PlanStrategy, &strategy); err != nil {

@@ -133,6 +133,26 @@
 				</button>
 			</div>
 		</div>
+		<div class="row mt-2">
+			<div class="plan-id d-none d-lg-flex"></div>
+			<div class="col">
+				<div class="form-check form-switch small evcc-gray mb-0">
+					<input
+						:id="formId('socFallback')"
+						v-model="selectedSocFallback"
+						class="form-check-input"
+						type="checkbox"
+						role="switch"
+						data-testid="repeating-plan-soc-fallback"
+						tabindex="0"
+						@change="update(true)"
+					/>
+					<label class="form-check-label" :for="formId('socFallback')">
+						{{ $t("main.chargingPlan.socFallback") }}
+					</label>
+				</div>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -157,6 +177,7 @@ export default defineComponent({
 		soc: Number,
 		showHeader: Boolean,
 		active: Boolean,
+		socFallback: Boolean,
 		rangePerSoc: Number,
 		formIdPrefix: String,
 	},
@@ -167,6 +188,7 @@ export default defineComponent({
 			selectedTime: this.time,
 			selectedSoc: this.soc,
 			selectedActive: this.active,
+			selectedSocFallback: this.socFallback,
 		};
 	},
 	computed: {
@@ -175,7 +197,8 @@ export default defineComponent({
 				!deepEqual(this.weekdays, this.selectedWeekdays) ||
 				this.time !== this.selectedTime ||
 				this.soc !== this.selectedSoc ||
-				this.active !== this.selectedActive
+				this.active !== this.selectedActive ||
+				this.socFallback !== this.selectedSocFallback
 			);
 		},
 		showApply(): boolean {
@@ -209,6 +232,9 @@ export default defineComponent({
 		active(newValue: boolean) {
 			this.selectedActive = newValue;
 		},
+		socFallback(newValue: boolean) {
+			this.selectedSocFallback = newValue;
+		},
 	},
 	methods: {
 		id(): number {
@@ -232,6 +258,7 @@ export default defineComponent({
 				soc: this.selectedSoc,
 				tz: this.tz,
 				active: this.selectedActive,
+				socFallback: this.selectedSocFallback,
 			};
 
 			if (forceSave || !this.selectedActive) {

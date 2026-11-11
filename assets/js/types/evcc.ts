@@ -747,6 +747,8 @@ export interface Loadpoint {
   planActive: boolean;
   /** Energy goal of the charging plan in kWh. */
   planEnergy: number;
+  /** The plan charges to the vehicle's floor because its SoC is unconfirmed. */
+  planFallback: boolean;
   /** Duration in seconds the charging plan is projected to miss its target time. */
   planOverrun: number;
   /** Charging plan strategy. */
@@ -826,6 +828,8 @@ export interface Loadpoint {
   vehicleRange: number;
   /** Charge level of the connected vehicle in %. Temperature in degrees for heating devices. */
   vehicleSoc: number;
+  /** The connected vehicle reported its SoC since it was plugged in, or shortly before. */
+  vehicleSocConfirmed: boolean;
   /** Title of the connected vehicle for UI display. */
   vehicleTitle: string;
   /** A short welcome charge is active to enable vehicle communication. */
@@ -1152,6 +1156,7 @@ export enum MESSAGING_EVENTS {
   GUEST = "guest",
   ASLEEP = "asleep",
   PLANOVERRUN = "planoverrun",
+  PLANFALLBACK = "planfallback",
   SUGGESTION = "suggestion",
 }
 
@@ -1308,6 +1313,8 @@ export interface RepeatingPlan {
   soc: number;
   /** Plan is active. */
   active: boolean;
+  /** While the vehicle's SoC is unconfirmed, the plan charges to the vehicle's floor. */
+  socFallback?: boolean;
 }
 
 export interface PlanWrapper {

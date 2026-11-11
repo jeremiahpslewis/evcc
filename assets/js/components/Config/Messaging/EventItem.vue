@@ -82,6 +82,12 @@ const EVENT_PARAMS: Record<MESSAGING_EVENTS, Record<string, string>> = {
 	start: { mode: "${mode}" },
 	stop: { chargedEnergy: "${chargedEnergy:%.1fk}", chargeDuration: "${chargeDuration}" },
 	planoverrun: { vehicleTitle: "{{ if .vehicleTitle }} {{ .vehicleTitle }} {{end}}" },
+	planfallback: {
+		vehicleTitle: "{{ if .vehicleTitle }}{{ .vehicleTitle }}{{ end }}",
+		energy: "${planFallbackEnergy:%.1f}",
+		soc: "${planFallbackSoc}%",
+		time: '{{ .planFallbackTime.Format "15:04" }}',
+	},
 	suggestion: { suggestionTitle: "${suggestionTitle}", suggestionAction: "${suggestionAction}" },
 	guest: {},
 };

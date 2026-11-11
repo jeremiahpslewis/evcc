@@ -23,6 +23,9 @@
 #  planoverrun:
 #    title: Plan overrun
 #    msg: "Plan {{- if .vehicleTitle }} for {{ .vehicleTitle }} will overrun.{{ else }} will overrun.{{end}}"
+#  planfallback:
+#    title: Plan charges to the floor
+#    msg: 'SoC unconfirmed, charging ${planFallbackEnergy:%.1f} kWh to ${planFallbackSoc}% by {{ .planFallbackTime.Format "15:04" }}.'
 
 #services:
 #- type: pushover

@@ -721,14 +721,16 @@ func TestLoadpointRequestChargeGoal(t *testing.T) {
 		limitSoc              int     // percent
 		limitEnergy, charged  float64 // kWh, Wh
 		wantInitial, wantSMax float32 // Wh
+		fallbackSoc           float64 // percent, soc fallback planning if > 0
 	}{
-		{"soc limit", 50, 20, 80, 0, 0, 10000, 40000},
-		{"no capacity, energy limit", 0, 0, 100, 10, 0, 0, 10000},
-		{"no capacity, energy limit partially charged", 0, 0, 100, 10, 4000, 4000, 10000},
-		{"no capacity, limit exceeded", 0, 0, 100, 10, 11000, 11000, 11000},
-		{"capacity but no soc, energy limit", 50, 0, 100, 10, 0, 0, 10000},
-		{"capacity but no soc, no energy limit", 50, 0, 100, 0, 0, 0, 50000},
-		{"capacity but no soc, partially charged", 50, 0, 100, 0, 10000, 9000, 50000},
+		{"soc limit", 50, 20, 80, 0, 0, 10000, 40000, 0},
+		{"no capacity, energy limit", 0, 0, 100, 10, 0, 0, 10000, 0},
+		{"no capacity, energy limit partially charged", 0, 0, 100, 10, 4000, 4000, 10000, 0},
+		{"no capacity, limit exceeded", 0, 0, 100, 10, 11000, 11000, 11000, 0},
+		{"capacity but no soc, energy limit", 50, 0, 100, 10, 0, 0, 10000, 0},
+		{"capacity but no soc, no energy limit", 50, 0, 100, 0, 0, 0, 50000, 0},
+		{"capacity but no soc, partially charged", 50, 0, 100, 0, 10000, 9000, 50000, 0},
+		{"stale soc, fallback assumes its own", 50, 86, 100, 0, 0, 2500, 50000, 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -740,6 +742,7 @@ func TestLoadpointRequestChargeGoal(t *testing.T) {
 			lp := loadpoint.NewMockAPI(ctrl)
 			lp.EXPECT().GetVehicle().Return(v).AnyTimes()
 			lp.EXPECT().GetSoc().Return(tc.soc).AnyTimes()
+			lp.EXPECT().GetSocFallback().Return(tc.fallbackSoc, tc.fallbackSoc > 0).AnyTimes()
 			lp.EXPECT().EffectiveLimitSoc().Return(tc.limitSoc).AnyTimes()
 			lp.EXPECT().GetLimitEnergy().Return(tc.limitEnergy).AnyTimes()
 			lp.EXPECT().GetChargedEnergy().Return(tc.charged).AnyTimes()
@@ -776,6 +779,7 @@ func TestLoadpointRequestChargingState(t *testing.T) {
 			lp := loadpoint.NewMockAPI(ctrl)
 			lp.EXPECT().GetVehicle().Return(v).AnyTimes()
 			lp.EXPECT().GetSoc().Return(20.0).AnyTimes()
+			lp.EXPECT().GetSocFallback().Return(0.0, false).AnyTimes()
 			lp.EXPECT().EffectiveLimitSoc().Return(80).AnyTimes()
 			lp.EXPECT().GetLimitEnergy().Return(0.0).AnyTimes()
 			lp.EXPECT().GetTitle().Return("lp").AnyTimes()
